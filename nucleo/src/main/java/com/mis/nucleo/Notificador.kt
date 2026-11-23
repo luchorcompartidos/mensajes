@@ -112,11 +112,30 @@ object Notificador {
         return pi?.let { boton(ctx, Posposicion.textoBoton(rapido), it) }
     }
 
-    /** Al posponer: la notificación sigue en la bandeja, sin sonido, indicando hasta cuándo. */
-    fun mostrarPospuesta(ctx: Context, a: Aviso, momento: Long) {
+    /**
+     * Vuelve a dibujar la notificación visible de un aviso con sus datos actuales (ej. el progreso de un envío),
+     * sin sonar ni emerger otra vez. Si no hay notificación visible, no hace nada.
+     */
+    fun actualizar(ctx: Context, id: Int) {
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        val sbn = nm.activeNotifications.firstOrNull { it.id == id } ?: return
+        val a = Nucleo.manejador.aviso(ctx, id) ?: return
+        val pospuesta = sbn.notification.extras?.getBoolean(EXTRA_ES_POSPUESTA) == true
+        when (sbn.notification.channelId) {
+            CANAL_ESTADO -> if (a.pospuestoHasta > 0) mostrarPospuesta(ctx, a, a.pospuestoHasta, tag = sbn.tag)
+            CANAL -> mostrar(ctx, a, comoAlarma = false, pospuesta = pospuesta, tag = sbn.tag)
+            else -> mostrar(ctx, a, comoAlarma = true, silenciada = true, pospuesta = pospuesta, tag = sbn.tag)
+        }
+    }
+
+    /**
+     * Al posponer: la notificación sigue en la bandeja, sin sonido, indicando hasta cuándo.
+     * [tag] != null: reemplaza esa notificación sin volver a avisar (ver [actualizar]).
+     */
+    fun mostrarPospuesta(ctx: Context, a: Aviso, momento: Long, tag: String? = null) {
         crearCanales(ctx)
         val m = Nucleo.manejador
-        quitar(ctx, a.id)
+        if (tag == null) quitar(ctx, a.id)
         val texto = "Pospuesto hasta el ${Tiempo.completo(momento)}" + if (a.texto.isBlank()) "" else "\n${a.texto}"
         val b = Notification.Builder(ctx, CANAL_ESTADO)
             .setSmallIcon(m.iconoNotificacion)
@@ -126,24 +145,26 @@ object Notificador {
             .setCategory(Notification.CATEGORY_REMINDER)
             .setContentIntent(abrir(ctx, a.id))
             .setAutoCancel(false)
+            .setOnlyAlertOnce(tag != null)
         m.accionesExtra(ctx, a).forEach { b.addAction(it) }
         b.addAction(boton(ctx, "Hecho", accion(ctx, a.id, ACCION_HECHO)))
         posponerElegir(ctx, a.id)?.let { b.addAction(boton(ctx, "Posponer…", it)) }
-        ctx.getSystemService(NotificationManager::class.java).notify("p${System.currentTimeMillis()}", a.id, b.build())
+        ctx.getSystemService(NotificationManager::class.java).notify(tag ?: "p${System.currentTimeMillis()}", a.id, b.build())
     }
 
     /**
      * Muestra el aviso. [comoAlarma]: canal de alarma, pantalla completa (si la app tiene esa pantalla)
      * y sonido en bucle hasta una acción. [silenciada]: alarma ya callada. [pospuesta]: viene de una posposición.
+     * [tag] != null: reemplaza esa notificación sin volver a avisar (ver [actualizar]).
      */
     fun mostrar(ctx: Context, a: Aviso, comoAlarma: Boolean = a.alarma, silenciada: Boolean = false,
-                pospuesta: Boolean = false) {
+                pospuesta: Boolean = false, tag: String? = null) {
         crearCanales(ctx)
         val m = Nucleo.manejador
         val nm = ctx.getSystemService(NotificationManager::class.java)
         // Una sola notificación por aviso: la anterior se quita para que la nueva aparezca como nueva
         // (con sonido, emergente y arriba); además corta un sonido en curso.
-        quitar(ctx, a.id)
+        if (tag == null) quitar(ctx, a.id)
         val base = a.texto.ifBlank { "Programado para las " + Tiempo.hora(a.momento) }
         val texto = if (pospuesta) "{\"Original Vencido\"}\n$base" else base
         val canal = when {
@@ -159,6 +180,7 @@ object Notificador {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setShowWhen(true)
             .setAutoCancel(false)   // queda en la bandeja hasta tocar Hecho o deslizarla
+            .setOnlyAlertOnce(tag != null)
             .addExtras(Bundle().apply { putBoolean(EXTRA_ES_POSPUESTA, pospuesta) })
         m.accionesExtra(ctx, a).forEach { b.addAction(it) }
         if (m.mostrarHecho(ctx, a)) b.addAction(boton(ctx, "Hecho", accion(ctx, a.id, ACCION_HECHO)))
@@ -183,8 +205,8 @@ object Notificador {
         val n = b.build()
         // Sonido en bucle hasta que se toque Hecho, Posponer o Callar (o se abra la bandeja).
         if (comoAlarma && !silenciada) n.flags = n.flags or Notification.FLAG_INSISTENT
-        nm.notify("n${System.currentTimeMillis()}", a.id, n)
-        if (!silenciada) Registro.anotar(ctx, "#${a.id} notificación mostrada (" +
+        nm.notify(tag ?: "n${System.currentTimeMillis()}", a.id, n)
+        if (!silenciada && tag == null) Registro.anotar(ctx, "#${a.id} notificación mostrada (" +
             (if (comoAlarma) "alarma" else "común") + ", notificaciones " +
             (if (nm.areNotificationsEnabled()) "activadas" else "DESACTIVADAS") + ")")
     }

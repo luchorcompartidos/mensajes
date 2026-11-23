@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono chico de las notificaciones: el mismo globo con reloj del ícono de la app. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+    <group
+        android:translateX="-26"
+        android:translateY="-28">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M40,30H68A10,10 0,0 1,78,40V62A10,10 0,0 1,68,72H44L35,80L35.6,71.2Q30,69 30,62V40A10,10 0,0 1,40,30Z M40,51a14,14 0,1 0,28,0a14,14 0,1 0,-28,0Z M44,51a10,10 0,1 0,20,0a10,10 0,1 0,-20,0Z M52.5,43h3v9.5h-3Z M55.5,49.5h5.5v3h-5.5Z" />
+    </group>
+</vector>

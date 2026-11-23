@@ -31,7 +31,8 @@ data class Envio(
     val alarma: Boolean = false,
     val activo: Boolean = true,         // false = ya venció (sonó)
     val cerrado: Boolean = false,       // true = se tocó "Hecho" después de vencer: sale del núcleo
-    val pospuestoHasta: Long = 0
+    val pospuestoHasta: Long = 0,
+    val whatsapp: String = ""           // con qué WhatsApp se abre: "" = según Ajustes, o WhatsApp.COMUN/BUSINESS/PREGUNTAR
 ) {
     /** Cuándo vuelve a sonar (la posposición, si hay); 0 = ya no suena. */
     val proxima: Long get() = if (pospuestoHasta > 0) pospuestoHasta else if (activo) momento else 0L
@@ -43,6 +44,9 @@ data class Envio(
 
     /** Se puede enviar: ya venció (o está pospuesto), no se cerró y queda alguien sin enviar. */
     val paraEnviar: Boolean get() = !cerrado && !activo && pendientes.isNotEmpty()
+
+    /** Se puede enviar ya, aunque siga programado ("Enviar ahora"): no se cerró y queda alguien sin enviar. */
+    val puedeEnviar: Boolean get() = !cerrado && pendientes.isNotEmpty()
 }
 
 /** Envíos guardados en el celular (preferencias "envios"). */
@@ -125,7 +129,7 @@ object Envios {
         e.destinos.forEach { d.put(JSONObject().put("c", it.contactoId).put("t", it.texto).put("e", it.enviado)) }
         return JSONObject().put("id", e.id).put("titulo", e.titulo).put("modo", e.modo.codigo).put("texto", e.texto)
             .put("dest", d).put("momento", e.momento).put("alarma", e.alarma).put("activo", e.activo)
-            .put("cerrado", e.cerrado).put("posp", e.pospuestoHasta)
+            .put("cerrado", e.cerrado).put("posp", e.pospuestoHasta).put("wa", e.whatsapp)
     }
 
     private fun desdeJson(o: JSONObject): Envio {
@@ -139,16 +143,26 @@ object Envios {
             },
             momento = o.getLong("momento"), alarma = o.optBoolean("alarma", false),
             activo = o.optBoolean("activo", true), cerrado = o.optBoolean("cerrado", false),
-            pospuestoHasta = o.optLong("posp", 0)
+            pospuestoHasta = o.optLong("posp", 0), whatsapp = o.optString("wa")
         )
     }
 }
 
-/** Contacto de la lista propia de la app (se carga a mano, como en Recordatorios). */
-data class Contacto(val id: Int, val nombre: String, val numero: String) {
+/**
+ * Contacto de la lista propia de la app (se carga a mano, como en Recordatorios).
+ * [porDefecto]: forma parte del grupo Default (se elige solo en cada envío nuevo; clave "def", como Recordatorios).
+ */
+data class Contacto(val id: Int, val nombre: String, val numero: String, val porDefecto: Boolean = false) {
     val etiqueta get() = nombre.ifBlank { numero }
-    /** WhatsApp pide formato internacional solo con dígitos (sin "+", espacios ni guiones). */
-    fun numeroWhatsapp() = numero.filter { it.isDigit() }
+
+    /**
+     * WhatsApp pide formato internacional solo con dígitos (sin "+", espacios ni guiones).
+     * Celulares de Argentina escritos como 54 + 10 dígitos (sin el 9): se agrega el 9 que pide WhatsApp.
+     */
+    fun numeroWhatsapp(): String {
+        val d = numero.filter { it.isDigit() }
+        return if (d.length == 12 && d.startsWith("54") && !d.startsWith("549")) "549" + d.drop(2) else d
+    }
 }
 
 /** Contactos guardados (preferencias "contactos", mismas claves que Recordatorios). */
@@ -159,11 +173,18 @@ object Contactos {
         val arr = JSONArray(prefs(ctx).getString("l", "[]") ?: "[]")
         return List(arr.length()) {
             val o = arr.getJSONObject(it)
-            Contacto(o.optInt("id", 0), o.optString("nombre"), o.optString("numero"))
+            Contacto(o.optInt("id", 0), o.optString("nombre"), o.optString("numero"), o.optBoolean("def", false))
         }
     }
 
     fun ordenados(ctx: Context) = todos(ctx).sortedBy { it.etiqueta.lowercase() }
+
+    /** Grupo Default: se eligen solos al crear un envío nuevo. */
+    fun defaults(ctx: Context) = ordenados(ctx).filter { it.porDefecto }
+
+    fun marcarDefault(ctx: Context, id: Int, valor: Boolean) {
+        obtener(ctx, id)?.let { guardar(ctx, it.copy(porDefecto = valor)) }
+    }
 
     fun obtener(ctx: Context, id: Int) = todos(ctx).firstOrNull { it.id == id }
 
@@ -180,13 +201,15 @@ object Contactos {
 
     /** Otro contacto con el mismo número (comparando solo dígitos), o null. */
     fun duplicado(ctx: Context, numero: String, excepto: Int): Contacto? {
-        val d = numero.filter { it.isDigit() }
+        val d = Contacto(0, "", numero).numeroWhatsapp()
         return todos(ctx).firstOrNull { it.id != excepto && it.numeroWhatsapp() == d }
     }
 
     private fun guardarTodos(ctx: Context, lista: List<Contacto>) {
         val arr = JSONArray()
-        lista.forEach { arr.put(JSONObject().put("id", it.id).put("nombre", it.nombre).put("numero", it.numero)) }
+        lista.forEach {
+            arr.put(JSONObject().put("id", it.id).put("nombre", it.nombre).put("numero", it.numero).put("def", it.porDefecto))
+        }
         prefs(ctx).edit().putString("l", arr.toString()).commit()
     }
 }

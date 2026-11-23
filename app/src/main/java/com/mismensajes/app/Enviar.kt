@@ -21,25 +21,54 @@ import com.mis.nucleo.R as RN
 
 /**
  * Abre WhatsApp con el número y el texto precargados (sin API ni accesibilidad: el usuario toca "Enviar"
- * en WhatsApp). Usa WhatsApp común y, si no está, WhatsApp Business.
+ * en WhatsApp). Con WhatsApp común y Business instalados, se usa el elegido en el envío o en Ajustes.
  */
 object WhatsApp {
-    private val PAQUETES = listOf("com.whatsapp", "com.whatsapp.w4b")
+    const val COMUN = "comun"
+    const val BUSINESS = "business"
+    const val PREGUNTAR = "preguntar"
+    private val PAQUETES = mapOf(COMUN to "com.whatsapp", BUSINESS to "com.whatsapp.w4b")
 
-    fun instalado(ctx: Context): String? = PAQUETES.firstOrNull {
-        runCatching { ctx.packageManager.getPackageInfo(it, 0) }.isSuccess
+    fun nombre(codigo: String) = when (codigo) {
+        COMUN -> "WhatsApp"
+        BUSINESS -> "WhatsApp Business"
+        else -> "Preguntar cada vez"
+    }
+
+    /** Los instalados (COMUN y/o BUSINESS). */
+    fun instalados(ctx: Context): List<String> = PAQUETES.filter { (_, paquete) ->
+        runCatching { ctx.packageManager.getPackageInfo(paquete, 0) }.isSuccess
+    }.keys.toList()
+
+    fun instalado(ctx: Context): String? = instalados(ctx).firstOrNull()
+
+    fun ambos(ctx: Context) = instalados(ctx).size == 2
+
+    /** Cuál usar para este envío; null = hay que preguntar (solo si están los dos instalados). */
+    fun cual(ctx: Context, e: Envio): String? {
+        val inst = instalados(ctx)
+        if (inst.size < 2) return inst.firstOrNull() ?: COMUN   // sin ninguno: se intenta por el navegador
+        val elegido = e.whatsapp.ifBlank { AjustesApp.whatsapp(ctx) }
+        return if (elegido == PREGUNTAR) null else elegido
     }
 
     /** Devuelve null si se abrió, o el motivo por el que no se pudo. */
-    fun abrir(act: Activity, numero: String, texto: String): String? {
+    fun abrir(act: Activity, numero: String, texto: String, cual: String): String? {
         if (numero.length < 6) return "El contacto no tiene un número válido"
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=$numero&text=" + Uri.encode(texto))
         val i = Intent(Intent.ACTION_VIEW, uri)
-        instalado(act)?.let { i.setPackage(it) }
+        PAQUETES[cual]?.takeIf { cual in instalados(act) }?.let { i.setPackage(it) }
         return try { act.startActivity(i); null } catch (e: ActivityNotFoundException) {
-            "No se pudo abrir WhatsApp (¿está instalado?)"
+            "No se pudo abrir ${nombre(cual)} (¿está instalado?)"
         }
     }
+}
+
+/** Ajustes propios de esta app (preferencias "mensajes_ajustes"; los de avisos están en el núcleo). */
+object AjustesApp {
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("mensajes_ajustes", Context.MODE_PRIVATE)
+    fun whatsapp(ctx: Context): String = prefs(ctx).getString("whatsapp", WhatsApp.COMUN) ?: WhatsApp.COMUN
+    fun guardarWhatsapp(ctx: Context, codigo: String) = prefs(ctx).edit().putString("whatsapp", codigo).apply()
 }
 
 /** Cierra un envío (igual que "Hecho"): cancela alarmas y posposición, quita la notificación y sale del núcleo. */
@@ -58,6 +87,7 @@ class EnviarActivity : Activity() {
     private var envioId = -1
     private var esperando = -1      // contacto al que se le abrió WhatsApp (falta confirmar si se envió)
     private var terminado = false   // se envió a todos en esta pantalla
+    private var preguntando = false // el diálogo "¿Se envió?" está abierto
 
     override fun onCreate(estado: Bundle?) {
         super.onCreate(estado)
@@ -93,7 +123,7 @@ class EnviarActivity : Activity() {
             return
         }
         mostrar(e)
-        if (esperando != -1) confirmar(esperando)
+        if (esperando != -1 && !preguntando) confirmar(esperando)
     }
 
     private fun nombre(contactoId: Int) = Contactos.obtener(this, contactoId)?.etiqueta ?: "(contacto borrado)"
@@ -104,7 +134,8 @@ class EnviarActivity : Activity() {
         findViewById<TextView>(R.id.enDetalle).text = when {
             e.cerrado -> "Enviado a todos · envío cerrado"
             e.pospuestoHasta > 0 -> "Pospuesto hasta el ${Tiempo.completo(e.pospuestoHasta)}"
-            e.activo -> "Programado para el ${Tiempo.completo(e.momento)}"
+            e.activo -> "Programado para el ${Tiempo.completo(e.momento)}. Enviar ahora no cancela la " +
+                "programación: si queda alguien sin enviar, el aviso suena igual a esa hora."
             else -> "Venció el ${Tiempo.completo(e.momento)}"
         }
         val enviados = e.destinos.count { it.enviado }
@@ -129,6 +160,31 @@ class EnviarActivity : Activity() {
         if (WhatsApp.instalado(this) == null && !e.cerrado) {
             findViewById<TextView>(R.id.enAyuda).text = "No se encontró WhatsApp en el celular: se intentará abrir por el navegador."
         }
+        // Con los dos WhatsApp instalados: con cuál se abre este envío (se cambia acá, solo para este envío).
+        findViewById<TextView>(R.id.enWhatsapp).apply {
+            visibility = if (WhatsApp.ambos(this@EnviarActivity) && !e.cerrado) View.VISIBLE else View.GONE
+            val actual = if (e.whatsapp.isBlank()) "${WhatsApp.nombre(AjustesApp.whatsapp(this@EnviarActivity))} (según Ajustes)"
+                         else WhatsApp.nombre(e.whatsapp)
+            text = "Se abre con: $actual · tocá para cambiarlo en este envío"
+            setOnClickListener { elegirWhatsappDelEnvio() }
+        }
+    }
+
+    private fun elegirWhatsappDelEnvio() {
+        val codigos = listOf("", WhatsApp.COMUN, WhatsApp.BUSINESS, WhatsApp.PREGUNTAR)
+        val textos = codigos.map {
+            if (it.isBlank()) "Según Ajustes (${WhatsApp.nombre(AjustesApp.whatsapp(this))})" else WhatsApp.nombre(it)
+        }.toTypedArray()
+        val e = Envios.obtener(this, envioId) ?: return
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Abrir este envío con")
+            .setSingleChoiceItems(textos, codigos.indexOf(e.whatsapp).coerceAtLeast(0)) { d, i ->
+                Envios.obtener(this, envioId)?.let { Envios.guardar(this, it.copy(whatsapp = codigos[i])) }
+                d.dismiss()
+                Envios.obtener(this, envioId)?.let { mostrar(it) }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     /** Fila de un contacto: toque = enviarle a él; mantener presionado = marcar/desmarcar como enviado. */
@@ -175,19 +231,30 @@ class EnviarActivity : Activity() {
         }
     }
 
-    private fun enviarA(contactoId: Int) {
+    private fun enviarA(contactoId: Int, elegido: String? = null) {
         val e = Envios.obtener(this, envioId) ?: return
         val d = e.destinos.firstOrNull { it.contactoId == contactoId } ?: return
         val c = Contactos.obtener(this, contactoId) ?: run { avisar("Ese contacto ya no existe"); return }
-        val error = WhatsApp.abrir(this, c.numeroWhatsapp(), e.textoPara(d))
+        val cual = elegido ?: WhatsApp.cual(this, e) ?: run {
+            // "Preguntar cada vez": se elige para este contacto.
+            val opciones = listOf(WhatsApp.COMUN, WhatsApp.BUSINESS)
+            AlertDialog.Builder(this, temaDialogo())
+                .setTitle("Enviar a ${c.etiqueta} con")
+                .setItems(opciones.map { WhatsApp.nombre(it) }.toTypedArray()) { _, i -> enviarA(contactoId, opciones[i]) }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            return
+        }
+        val error = WhatsApp.abrir(this, c.numeroWhatsapp(), e.textoPara(d), cual)
         if (error != null) { avisar(error); return }
         esperando = contactoId
-        Registro.anotar(this, "#$envioId WhatsApp abierto para «${c.etiqueta}»")
+        Registro.anotar(this, "#$envioId ${WhatsApp.nombre(cual)} abierto para «${c.etiqueta}»")
     }
 
     /** Al volver de WhatsApp: ¿se envió? */
     private fun confirmar(contactoId: Int) {
         var respondido = false
+        preguntando = true
         AlertDialog.Builder(this, temaDialogo())
             .setTitle("¿Se envió?")
             .setMessage("¿Enviaste el mensaje a ${nombre(contactoId)}?")
@@ -198,16 +265,18 @@ class EnviarActivity : Activity() {
                 Envios.marcarEnviado(this, envioId, contactoId)?.let { revisar(it) }
             }
             .setNegativeButton("No") { _, _ -> respondido = true; esperando = -1 }
-            .setOnDismissListener { if (!respondido) esperando = -1 }
+            .setOnDismissListener { preguntando = false; if (!respondido) esperando = -1 }
             .show()
     }
 
-    /** Vuelve a dibujar y, si ya se envió a todos, cierra el envío. */
+    /** Vuelve a dibujar y, si ya se envió a todos, cierra el envío; si no, actualiza el progreso de la notificación. */
     private fun revisar(e: Envio) {
         if (e.pendientes.isEmpty() && !e.cerrado) {
             cerrarEnvio(this, envioId, "enviado a todos")
             terminado = true
             avisar("Enviado a todos. Envío cerrado.")
+        } else if (!e.cerrado) {
+            Notificador.actualizar(this, envioId)
         }
         Envios.obtener(this, envioId)?.let { mostrar(it) }
     }
@@ -218,8 +287,9 @@ class EnviarActivity : Activity() {
         val faltan = e.pendientes.size
         AlertDialog.Builder(this, temaDialogo())
             .setTitle("Cerrar envío")
-            .setMessage(if (faltan == 0) "¿Cerrar el envío?"
-                        else "Quedan $faltan sin enviar. ¿Cerrar el envío igual? (es lo mismo que «Hecho»)")
+            .setMessage((if (faltan == 0) "¿Cerrar el envío?"
+                        else "Quedan $faltan sin enviar. ¿Cerrar el envío igual? (es lo mismo que «Hecho»)") +
+                        if (e.activo || e.pospuestoHasta > 0) " También se cancela la programación." else "")
             .setPositiveButton("Cerrar envío") { _, _ ->
                 cerrarEnvio(this, envioId, if (faltan == 0) "Hecho" else "Hecho, quedaron $faltan sin enviar")
                 finish()

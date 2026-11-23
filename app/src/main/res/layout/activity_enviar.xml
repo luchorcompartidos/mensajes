@@ -41,6 +41,17 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
+        <TextView
+            android:id="@+id/enWhatsapp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:minHeight="40dp"
+            android:gravity="center_vertical"
+            android:textColor="@color/acento"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
         <Button
             android:id="@+id/enSiguiente"
             style="@style/Boton.Principal"

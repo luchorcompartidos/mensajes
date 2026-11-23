@@ -79,4 +79,5 @@ object ManejadorMensajes : Manejador {
     override val pantallaPosponer = PosponerActivity::class.java
     override val pantallaAlarma = AlarmaActivity::class.java
     override val nombreCanal = "Mensajes programados"
+    override val iconoNotificacion = R.drawable.ic_notif_msg
 }

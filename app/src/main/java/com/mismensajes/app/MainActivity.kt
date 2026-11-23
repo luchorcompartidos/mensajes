@@ -34,6 +34,9 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnContactos).setOnClickListener {
             startActivity(Intent(this, ContactosActivity::class.java))
         }
+        findViewById<TextView>(R.id.btnAjustes).setOnClickListener {
+            startActivity(Intent(this, AjustesActivity::class.java))
+        }
         findViewById<TextView>(R.id.tituloRegistro).setOnClickListener {
             verRegistro = !verRegistro
             actualizar()
@@ -129,8 +132,11 @@ class MainActivity : Activity() {
                 setTextColor(getColor(RN.color.texto3))
                 setPadding(0, (4 * dp).toInt(), 0, 0)
             })
-            if (e.paraEnviar) addView(Button(this@MainActivity, null, 0, RN.style.Boton_Principal).apply {
-                text = if (e.pendientes.size > 1) "Enviar (${e.pendientes.size} pendientes)" else "Enviar"
+            // Vencido con pendientes: "Enviar" (principal). Todavía programado: "Enviar ahora" (secundario).
+            if (e.puedeEnviar) addView(Button(this@MainActivity, null, 0,
+                if (e.paraEnviar) RN.style.Boton_Principal else RN.style.Boton).apply {
+                val n = if (e.pendientes.size > 1) " (${e.pendientes.size} pendientes)" else ""
+                text = (if (e.paraEnviar) "Enviar" else "Enviar ahora") + n
                 setOnClickListener {
                     startActivity(Intent(this@MainActivity, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, e.id))
                 }

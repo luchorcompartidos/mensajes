@@ -11,6 +11,7 @@ import android.view.ContextThemeWrapper
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -34,7 +35,8 @@ class ContactosActivity : Activity() {
         }
         val ayuda = TextView(this).apply {
             text = "Los contactos se cargan escribiendo el número a mano. Con «Validar en WA» se busca solo ese " +
-                "número en la agenda del celular para traer el nombre y ver si tiene WhatsApp."
+                "número en la agenda del celular para traer el nombre y ver si tiene WhatsApp.\n" +
+                "Casilla = forma parte del grupo Default: esos contactos se eligen solos en cada envío nuevo."
             textSize = 13f
             setTextColor(getColor(RN.color.texto2))
             setPadding(0, (12 * dp).toInt(), 0, (8 * dp).toInt())
@@ -67,13 +69,24 @@ class ContactosActivity : Activity() {
         }
         val dp = resources.displayMetrics.density
         todos.forEach { c ->
-            lista.addView(TextView(this).apply {
-                text = "${c.etiqueta}\n${c.numero}"
-                textSize = 15f
-                setTextColor(getColor(RN.color.texto))
+            lista.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                isBaselineAligned = false   // si no, el texto de 2 líneas baja y se corta
+                gravity = android.view.Gravity.CENTER_VERTICAL
                 setBackgroundResource(RN.drawable.campo)
-                setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
-                setOnClickListener { editarContacto(c) { armar() } }
+                setPadding((6 * dp).toInt(), (4 * dp).toInt(), (14 * dp).toInt(), (4 * dp).toInt())
+                addView(CheckBox(this@ContactosActivity).apply {
+                    isChecked = c.porDefecto
+                    contentDescription = "Grupo Default"
+                    setOnCheckedChangeListener { _, v -> Contactos.marcarDefault(this@ContactosActivity, c.id, v) }
+                })
+                addView(TextView(this@ContactosActivity).apply {
+                    text = "${c.etiqueta}\n${c.numero}"
+                    textSize = 15f
+                    setTextColor(getColor(RN.color.texto))
+                    setPadding((4 * dp).toInt(), (6 * dp).toInt(), 0, (6 * dp).toInt())
+                    setOnClickListener { editarContacto(Contactos.obtener(this@ContactosActivity, c.id)) { armar() } }
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
         }
@@ -95,6 +108,10 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
         textSize = 12f
     }
     val resultadoWa = TextView(c).apply { textSize = 13f; visibility = View.GONE }
+    val porDefecto = CheckBox(c).apply {
+        text = "Forma parte del grupo Default (se elige solo en cada envío nuevo)"
+        isChecked = actual?.porDefecto ?: false
+    }
     val validar = Button(c).apply {
         text = "Validar en WA y recuperar"
         setOnClickListener {
@@ -116,7 +133,7 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
     val caja = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(m, m / 2, m, 0)
-        addView(nombre); addView(numero); addView(validar); addView(resultadoWa); addView(ayuda)
+        addView(nombre); addView(numero); addView(validar); addView(resultadoWa); addView(porDefecto); addView(ayuda)
     }
     val b = AlertDialog.Builder(this, temaDialogo())
         .setTitle(if (actual == null) "Agregar contacto" else "Editar contacto")
@@ -129,7 +146,7 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
                 avisar("Ya existe un contacto con ese número: ${it.etiqueta}")
                 return@setPositiveButton
             }
-            val nuevo = Contacto(id, nombre.text.toString().trim(), num)
+            val nuevo = Contacto(id, nombre.text.toString().trim(), num, porDefecto.isChecked)
             Contactos.guardar(this, nuevo)
             alGuardar(nuevo)
         }
@@ -169,7 +186,7 @@ fun Activity.elegirContactos(seleccion: MutableList<Int>, alCambiar: () -> Unit)
         return
     }
     val marcados = BooleanArray(todos.size) { todos[it].id in seleccion }
-    val textos = todos.map { "${it.etiqueta} · ${it.numero}" }.toTypedArray()
+    val textos = todos.map { (if (it.porDefecto) "★ " else "") + "${it.etiqueta} · ${it.numero}" }.toTypedArray()
     fun aplicar() {
         // Conserva el orden de la lista de contactos.
         seleccion.clear()

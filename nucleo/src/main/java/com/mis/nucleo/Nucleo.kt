@@ -14,7 +14,7 @@ import android.content.Context
  */
 object Nucleo {
     /** Versión del núcleo (independiente de la versión de cada app). */
-    const val VERSION = "0.3.0"
+    const val VERSION = "0.4.0"
 
     private var actual: Manejador? = null
 

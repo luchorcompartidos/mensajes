@@ -80,6 +80,8 @@ class EditarActivity : Activity() {
             fecha = prox.toLocalDate()
             hora = prox.toLocalTime()
             swAlarma.isChecked = Ajustes.alarmaPorDefecto(this)
+            // Envío nuevo: arranca con el grupo Default de contactos.
+            seleccion += Contactos.defaults(this).map { it.id }
         }
         findViewById<RadioGroup>(R.id.rgModo).apply {
             check(if (e?.modo == ModoTexto.POR_CONTACTO) R.id.rbPorContacto else R.id.rbMismo)
@@ -208,7 +210,8 @@ class EditarActivity : Activity() {
                 Destino(it, if (porContacto) textos[it] ?: "" else "", enviado = !deCero && previos[it]?.enviado == true)
             },
             momento = momento,
-            alarma = swAlarma.isChecked
+            alarma = swAlarma.isChecked,
+            whatsapp = original?.whatsapp ?: ""
         )
         // Cancela alarmas, posposición y notificación anteriores; después programa la nueva fecha.
         Programador.quitar(this, id)
