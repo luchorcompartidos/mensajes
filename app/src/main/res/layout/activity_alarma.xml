@@ -39,11 +39,21 @@
             android:textSize="18sp" />
 
         <Button
-            android:id="@+id/alCallar"
+            android:id="@+id/alEnviar"
             style="@style/Boton.Principal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="40dp"
+            android:text="Enviar"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/alCallar"
+            style="@style/Boton.Principal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:text="Callar"
             android:textSize="18sp" />
 

@@ -4,6 +4,12 @@
     <!-- Solo para "Validar en WA": busca en la agenda el número escrito a mano (no se lista la agenda). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
+    <!-- Para saber si está WhatsApp (o WhatsApp Business) y abrirlo con el texto precargado. -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
+
     <!-- Permisos y receivers de alarmas: vienen del manifiesto de :nucleo. -->
     <application
         android:name=".AppMensajes"
@@ -32,6 +38,12 @@
             android:name=".ContactosActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="false" />
+
+        <activity
+            android:name=".EnviarActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:launchMode="singleTop" />
 
         <activity
             android:name=".PosponerActivity"

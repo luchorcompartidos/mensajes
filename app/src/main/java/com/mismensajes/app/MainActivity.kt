@@ -102,12 +102,14 @@ class MainActivity : Activity() {
         val dp = resources.displayMetrics.density
         val nombres = Envios.nombres(this, e)
         val cabeza = e.titulo.ifBlank { nombres }
-        val linea2 = (if (e.titulo.isBlank()) "" else "Para: $nombres\n") + estado(e)
+        val progreso = Envios.progreso(e)
+        val linea2 = (if (e.titulo.isBlank()) "" else "Para: $nombres\n") + estado(e) +
+            if (progreso.isBlank()) "" else " · $progreso"
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(RN.drawable.campo)
             setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
-            if (e.proxima == 0L) alpha = 0.65f
+            if (e.proxima == 0L && !e.paraEnviar) alpha = 0.65f
             addView(TextView(this@MainActivity).apply {
                 text = cabeza
                 textSize = 16f
@@ -127,6 +129,13 @@ class MainActivity : Activity() {
                 setTextColor(getColor(RN.color.texto3))
                 setPadding(0, (4 * dp).toInt(), 0, 0)
             })
+            if (e.paraEnviar) addView(Button(this@MainActivity, null, 0, RN.style.Boton_Principal).apply {
+                text = if (e.pendientes.size > 1) "Enviar (${e.pendientes.size} pendientes)" else "Enviar"
+                setOnClickListener {
+                    startActivity(Intent(this@MainActivity, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, e.id))
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, EditarActivity::class.java).putExtra(Programador.EXTRA_ID, e.id))
             }

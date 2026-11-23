@@ -14,20 +14,21 @@
 | URL publicada | APK: https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk |
 | Tipo | Android APK (Kotlin nativo, compilado en GitHub Actions) |
 | Estado | En desarrollo |
-| Última versión (Release) | **v0.0.3** (23-11-2026) |
+| Última versión (Release) | **v0.0.4** (23-11-2026) |
 | Se conecta con | WhatsApp (por intent, sin API) · a futuro Google Sheets |
 
 ## 2. Etapa actual
-**Etapa 0.5 — Envío por WhatsApp** (próxima a empezar; la 0.4 quedó cerrada con la v0.0.3)
-- Etapa 0.4 (cerrada): ABM de envíos + contactos propios + pantallas "Posponer…" y alarma → Release **v0.0.3**.
-- Cómo quedó: `Envio` (título opcional, modo de texto, texto común, `Destino`s con texto propio y marca `enviado`, momento, alarma, activo, cerrado, pospuestoHasta) guardado en preferencias "envios". `ManejadorMensajes` convierte cada envío en `Aviso` (mismo id). Al vencer queda "vencido"; con "Hecho" pasa a "cerrado" (sale del núcleo). Editar cancela la posposición y reprograma.
-- Contactos: lista propia (preferencias "contactos", mismas claves que Recordatorios), carga manual del número + "Validar en WA y recuperar" (busca solo ese número en la agenda; `READ_CONTACTS`). Borrar un contacto lo quita de los envíos.
-- **A probar en el celular:** crear / editar / borrar (también manteniendo presionada la tarjeta), modo "un texto por contacto", validar número, aviso común y alarma a pantalla completa (Callar, Hecho, Posponer rápido, Posponer…, Editar), que sobreviva a un reinicio.
+**Próxima etapa a definir** (la 0.5 quedó cerrada con la v0.0.4; ver opciones en la sección 3)
+- Etapa 0.5 (cerrada): envío por WhatsApp → Release **v0.0.4**.
+- Cómo quedó: al vencer, botón **"Enviar"** en la notificación (por `accionesExtra`; en ese caso va sin "Hecho" por el límite de 3 botones, vía `mostrarHecho`), en la pantalla de alarma y en la tarjeta de la lista (vencidos con pendientes). Abre `EnviarActivity` (`Enviar.kt`): lista de contactos ✓/○, "Enviar a X (n de N)" abre WhatsApp con número y texto precargados (`WhatsApp.abrir`, común o Business, `<queries>` en el manifiesto); al volver pregunta "¿Se envió?" y marca `Destino.enviado`. Tocar un contacto = enviarle solo a él; mantener presionado = marcar/desmarcar. Con todos enviados el envío se cierra solo (`cerrarEnvio`); "Cerrar envío (Hecho)" cierra aunque falten. Progreso "Enviado a n de N" en la lista y en la notificación.
+- Editar conserva las marcas de enviado (para reprogramar solo los pendientes), salvo que ya estuvieran todos enviados: entonces arranca de cero.
+- **A probar en el celular:** lo pendiente de la 0.4 + botón Enviar en notificación común y en alarma (que calle el sonido), pedido de desbloqueo desde la alarma, confirmación al volver de WhatsApp, cierre automático al enviar a todos, modo "un texto por contacto", números con formato internacional (ej. 549…).
 - En curso: —
 
 ## 3. Próximos pasos
-1. **Etapa 0.5 — Envío:** al vencer, botón "Enviar" (por `Manejador.accionesExtra` y en la pantalla de alarma) → abre WhatsApp con el texto precargado contacto por contacto (base: `EnviarWhatsappActivity` y `Envios.abrirWhatsapp` de Recordatorios), marcando `Destino.enviado` uno por uno y mostrando el avance en la lista.
-2. **Etapa posterior — Núcleo a su repo:** mover `nucleo/` a `luchorcompartidos/nucleo-android` (submódulo, `submodules: true` en Actions) y, en etapa aparte, migrar Recordatorios a ese núcleo.
+1. **Probar la v0.0.4** en el celular y corregir lo que aparezca.
+2. **A elegir:** "Enviar ahora" para envíos todavía programados · pantalla de Ajustes (posponer rápido, alarma por defecto) · grupo "Default" de contactos · variables tipo `{nombre}` en el texto.
+3. **Etapa posterior — Núcleo a su repo:** mover `nucleo/` a `luchorcompartidos/nucleo-android` (submódulo, `submodules: true` en Actions) y, en etapa aparte, migrar Recordatorios a ese núcleo.
 
 ## 4. Decisiones tomadas
 - 2026-11-23 App separada de Recordatorios (no pantalla nueva dentro de ella): escalabilidad y funciones futuras propias de mensajería.
@@ -45,11 +46,15 @@
 - 2026-11-23 Contactos como Recordatorios: no se lee ni se lista la agenda; el número se escribe a mano y "Validar en WA" busca solo ese número (nombre + si tiene WhatsApp). Lista propia reutilizable en cualquier envío.
 - 2026-11-23 Pantallas "Posponer…" y alarma a pantalla completa: se sumaron en la 0.4 (en `:app`, `Pantallas.kt`).
 - 2026-11-23 Los ids de envíos nunca se reutilizan (contador "ultimo_id"), para no cruzar alarmas o notificaciones viejas.
+- 2026-11-23 Envío: la app no sabe si WhatsApp envió el mensaje; al volver se pregunta "¿Se envió?" y recién ahí se marca. Con todos enviados, el envío se cierra solo (igual que "Hecho").
+- 2026-11-23 La apertura de WhatsApp se escribió en esta app (`WhatsApp.abrir`, link `api.whatsapp.com/send`) sin copiar `EnviarWhatsappActivity` de Recordatorios (en esa sesión no se pudo abrir ese repo); alinear al pasar el núcleo a su repo.
 - 2026-11-23 Link de Mi Panel: cada Release sube además una copia de nombre fijo → `https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk`.
 
 ## 5. Pendientes / dudas abiertas
 - [ ] Ícono definitivo (hoy uno provisorio).
-- [ ] Probar en el celular la v0.0.3 (ver sección 2).
+- [ ] Probar en el celular la v0.0.4 (ver sección 2).
+- [ ] Con WhatsApp común y Business instalados se usa el común: ¿elegir cuál por envío o en Ajustes?
+- [ ] Al enviar a algunos, la notificación no actualiza su texto de progreso (se ve en la pantalla de envío y en la lista).
 - [ ] ¿Grupo "Default" de contactos como en Recordatorios? ¿Pantalla de Ajustes (posponer rápido, alarma por defecto)?
 - [ ] ¿Pasar `Contactos`/`Agenda` y las pantallas al núcleo cuando se migre Recordatorios?
 - [ ] Cargar el link fijo en la planilla de Mi Panel.
@@ -57,11 +62,11 @@
 - [ ] Futuro: SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`), plantillas, listas, importar desde Google Sheets.
 
 ## 6. Datos técnicos clave
-- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio`, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`); núcleo en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`. Base pendiente de traer de Recordatorios: `EnviarWhatsappActivity`/`abrirWhatsapp` (`Contactos.kt`), `Version.kt`.
+- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio`, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `cerrarEnvio`, `EnviarActivity`); núcleo en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`. Pendiente de traer de Recordatorios: `Version.kt` (Changelog / aviso de versión nueva).
 - Requisitos heredados: minSdk 34 (Android 14), compileSdk/targetSdk 35. Permisos de alarmas (`POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT`) y receivers declarados en el manifiesto de `:nucleo`; `READ_CONTACTS` en el manifiesto de `:app` (solo para validar); falta `SEND_SMS` (solo con SMS automático).
 - Configuración / servicios: Secrets `KEYSTORE_B64` y `KEYSTORE_PASS` cargados (los mismos de Recordatorios; alias `recordatorios`, o el Secret `KEYSTORE_ALIAS` si se cambia la clave). Respaldo: `secretos-github.txt` del chat "Recordatorios PWA vs app nativa" (14-11-2026).
 - Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
-- Núcleo: versión propia (`Nucleo.VERSION`, hoy 0.2.0), independiente de la de cada app; `useAndroidX=false` (sin librerías externas).
+- Núcleo: versión propia (`Nucleo.VERSION`, hoy 0.3.0: suma `Manejador.mostrarHecho` y `Notificador.sonando`), independiente de la de cada app; `useAndroidX=false` (sin librerías externas).
 - Releases: según `ESTANDAR-VERSIONES.md` del repo home (`[major]` / `[minor]` / `[patch]` / `[skip release]` en el commit; cambios que no tocan la app van sin release). Como Recordatorios: solo Changelog y aviso con link al instalador.
 
 ## 7. Historial (resumido)
@@ -69,6 +74,7 @@
 - 2026-11-23: Etapa 0.2: esqueleto `:app` + `:nucleo` y workflow → Release **v0.0.1** (patch).
 - 2026-11-23: Etapa 0.3: núcleo de alarmas genérico (Programador, Notificador, receivers, Posposicion, Ajustes) + pantalla de prueba → Release **v0.0.2** (patch).
 - 2026-11-23: Etapa 0.4: ABM de envíos, contactos propios con validación en WA y pantallas Posponer/alarma (se descarta el aviso de prueba) → Release **v0.0.3** (patch).
+- 2026-11-23: Etapa 0.5: envío por WhatsApp contacto por contacto (botón Enviar en notificación, alarma y lista; marca de enviado y cierre automático); núcleo 0.3.0 → Release **v0.0.4** (patch).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*

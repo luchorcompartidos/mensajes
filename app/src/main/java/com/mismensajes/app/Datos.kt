@@ -37,6 +37,12 @@ data class Envio(
     val proxima: Long get() = if (pospuestoHasta > 0) pospuestoHasta else if (activo) momento else 0L
 
     fun textoPara(d: Destino) = if (modo == ModoTexto.MISMO) texto else d.texto
+
+    /** Destinos a los que todavía no se les envió. */
+    val pendientes: List<Destino> get() = destinos.filter { !it.enviado }
+
+    /** Se puede enviar: ya venció (o está pospuesto), no se cerró y queda alguien sin enviar. */
+    val paraEnviar: Boolean get() = !cerrado && !activo && pendientes.isNotEmpty()
 }
 
 /** Envíos guardados en el celular (preferencias "envios"). */
@@ -90,6 +96,20 @@ object Envios {
     }
 
     fun titulo(ctx: Context, e: Envio) = e.titulo.ifBlank { "Mensaje para " + nombres(ctx, e) }
+
+    /** Marca (o desmarca) como enviado el destino de ese contacto. Devuelve el envío actualizado. */
+    fun marcarEnviado(ctx: Context, id: Int, contactoId: Int, enviado: Boolean = true): Envio? {
+        val e = obtener(ctx, id) ?: return null
+        val nuevo = e.copy(destinos = e.destinos.map { if (it.contactoId == contactoId) it.copy(enviado = enviado) else it })
+        guardar(ctx, nuevo)
+        return nuevo
+    }
+
+    /** "Enviado a 1 de 3" ("" si todavía no se envió a nadie). */
+    fun progreso(e: Envio): String {
+        val n = e.destinos.count { it.enviado }
+        return if (n == 0) "" else "Enviado a $n de ${e.destinos.size}"
+    }
 
     fun resumenTexto(e: Envio) =
         if (e.modo == ModoTexto.MISMO) e.texto else "Un texto por contacto (${e.destinos.size})"

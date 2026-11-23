@@ -61,6 +61,10 @@ object Notificador {
     fun esPospuesta(ctx: Context, id: Int) = ctx.getSystemService(NotificationManager::class.java)
         .activeNotifications.firstOrNull { it.id == id }?.notification?.extras?.getBoolean(EXTRA_ES_POSPUESTA) == true
 
+    /** true si la notificación visible de ese aviso es una alarma sonando (no silenciada ni pospuesta). */
+    fun sonando(ctx: Context, id: Int) = ctx.getSystemService(NotificationManager::class.java)
+        .activeNotifications.any { it.id == id && it.notification.channelId == CANAL_ALARMA }
+
     /** Deja la alarma en la bandeja y en pantalla, pero sin sonido. */
     fun silenciar(ctx: Context, id: Int) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -157,7 +161,7 @@ object Notificador {
             .setAutoCancel(false)   // queda en la bandeja hasta tocar Hecho o deslizarla
             .addExtras(Bundle().apply { putBoolean(EXTRA_ES_POSPUESTA, pospuesta) })
         m.accionesExtra(ctx, a).forEach { b.addAction(it) }
-        b.addAction(boton(ctx, "Hecho", accion(ctx, a.id, ACCION_HECHO)))
+        if (m.mostrarHecho(ctx, a)) b.addAction(boton(ctx, "Hecho", accion(ctx, a.id, ACCION_HECHO)))
 
         val elegir = posponerElegir(ctx, a.id)
         if (comoAlarma) {

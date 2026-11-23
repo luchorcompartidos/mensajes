@@ -14,7 +14,7 @@ import android.content.Context
  */
 object Nucleo {
     /** Versión del núcleo (independiente de la versión de cada app). */
-    const val VERSION = "0.2.0"
+    const val VERSION = "0.3.0"
 
     private var actual: Manejador? = null
 
@@ -80,6 +80,12 @@ interface Manejador {
 
     /** Botones propios de la app (ej. "Enviar"); van antes que los del núcleo. Android muestra hasta 3. */
     fun accionesExtra(ctx: Context, a: Aviso): List<Notification.Action> = emptyList()
+
+    /**
+     * false = la notificación al vencer va sin "Hecho" (deja lugar a un botón propio, ya que Android
+     * muestra hasta 3). La app debe ofrecer "Hecho" en otro lado (ej. su pantalla de alarma).
+     */
+    fun mostrarHecho(ctx: Context, a: Aviso): Boolean = true
 
     /** Nombre visible del canal de avisos comunes (Ajustes de Android > Notificaciones). */
     val nombreCanal: String get() = "Avisos"

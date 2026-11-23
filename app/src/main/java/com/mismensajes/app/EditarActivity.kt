@@ -195,12 +195,18 @@ class EditarActivity : Activity() {
         if (momento <= System.currentTimeMillis()) { avisar("Esa fecha y hora ya pasaron. Elegí un momento futuro."); return }
 
         val id = original?.id ?: Envios.nuevoId(this)
+        // Se conservan las marcas de "enviado" (para reprogramar solo los pendientes), salvo que ya se
+        // hubiera enviado a todos: entonces es una vuelta nueva y se empieza de cero.
+        val previos = original?.destinos?.associateBy { it.contactoId } ?: emptyMap()
+        val deCero = previos.isNotEmpty() && previos.values.all { it.enviado }
         val e = Envio(
             id = id,
             titulo = edTitulo.text.toString().trim(),
             modo = if (porContacto) ModoTexto.POR_CONTACTO else ModoTexto.MISMO,
             texto = textoComun,
-            destinos = seleccion.map { Destino(it, if (porContacto) textos[it] ?: "" else "") },
+            destinos = seleccion.map {
+                Destino(it, if (porContacto) textos[it] ?: "" else "", enviado = !deCero && previos[it]?.enviado == true)
+            },
             momento = momento,
             alarma = swAlarma.isChecked
         )

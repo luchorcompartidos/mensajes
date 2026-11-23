@@ -274,6 +274,20 @@ class AlarmaActivity : Activity() {
             text = nota
             visibility = if (nota.isBlank()) View.GONE else View.VISIBLE
         }
+        // "Enviar" mientras quede alguien sin enviar: calla la alarma y abre la pantalla de envío.
+        val pendientes = Envios.obtener(this, envioId)?.pendientes?.size ?: 0
+        findViewById<Button>(R.id.alEnviar).apply {
+            visibility = if (pendientes > 0) View.VISIBLE else View.GONE
+            text = if (pendientes > 1) "Enviar ($pendientes contactos)" else "Enviar"
+            setOnClickListener {
+                Notificador.silenciar(this@AlarmaActivity, envioId)
+                conDesbloqueo {
+                    startActivity(Intent(this@AlarmaActivity, EnviarActivity::class.java)
+                        .putExtra(Programador.EXTRA_ID, envioId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    finish()
+                }
+            }
+        }
         val callar = findViewById<Button>(R.id.alCallar)
         callar.isEnabled = true
         callar.text = "Callar"
