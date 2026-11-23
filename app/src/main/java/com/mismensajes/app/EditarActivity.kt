@@ -4,7 +4,9 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.os.Bundle
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
@@ -42,6 +44,8 @@ class EditarActivity : Activity() {
     private lateinit var rbPorContacto: RadioButton
     private lateinit var cajaTextos: LinearLayout
     private lateinit var swAlarma: Switch
+    private lateinit var txtVista: TextView
+    private var ultimoCampo: EditText? = null                  // campo de texto donde se inserta la variable
 
     override fun onCreate(estado: Bundle?) {
         super.onCreate(estado)
@@ -52,6 +56,9 @@ class EditarActivity : Activity() {
         rbPorContacto = findViewById(R.id.rbPorContacto)
         cajaTextos = findViewById(R.id.cajaTextos)
         swAlarma = findViewById(R.id.swAlarma)
+        txtVista = findViewById(R.id.txtVista)
+        seguir(edTexto)
+        findViewById<Button>(R.id.btnVariable).setOnClickListener { elegirVariable() }
 
         original = Envios.obtener(this, intent.getIntExtra(Programador.EXTRA_ID, -1))
         val e = original
@@ -125,6 +132,12 @@ class EditarActivity : Activity() {
 
     /** Muestra el texto común o un campo por contacto según el modo elegido. */
     private fun mostrarModo() {
+        armarCamposTexto()
+        ultimoCampo = if (rbPorContacto.isChecked) camposTexto.values.firstOrNull() else edTexto
+        actualizarVista()
+    }
+
+    private fun armarCamposTexto() {
         val porContacto = rbPorContacto.isChecked
         edTexto.visibility = if (porContacto) View.GONE else View.VISIBLE
         cajaTextos.visibility = if (porContacto) View.VISIBLE else View.GONE
@@ -158,9 +171,55 @@ class EditarActivity : Activity() {
                 setText(textos[id] ?: edTexto.text.toString())
             }
             camposTexto[id] = campo
+            seguir(campo)
             cajaTextos.addView(campo, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT))
         }
+    }
+
+    /** Recuerda el último campo de texto tocado y mantiene al día la vista previa de las variables. */
+    private fun seguir(campo: EditText) {
+        campo.setOnFocusChangeListener { _, foco -> if (foco) { ultimoCampo = campo; actualizarVista() } }
+        campo.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) { if (campo === ultimoCampo) actualizarVista() }
+        })
+    }
+
+    /** Si el texto usa variables: cómo queda para su contacto (el primero elegido, en "mismo texto") a la hora programada. */
+    private fun actualizarVista() {
+        val campo = ultimoCampo
+        val texto = campo?.text?.toString().orEmpty()
+        if (campo == null || !Variables.usa(texto)) { txtVista.visibility = View.GONE; return }
+        val contactoId = if (campo === edTexto) seleccion.firstOrNull()
+                         else camposTexto.entries.firstOrNull { it.value === campo }?.key
+        val c = contactoId?.let { Contactos.obtener(this, it) }
+        val raras = Variables.desconocidas(texto)
+        txtVista.text = "Vista previa" + (c?.let { " para ${it.etiqueta}" } ?: "") + ": " +
+            Variables.aplicar(texto, c, ZonedDateTime.of(fecha, hora, ZoneId.systemDefault())) +
+            if (raras.isEmpty()) "" else "\n⚠ No se reconoce ${raras.joinToString(", ")}: se envía tal cual."
+        txtVista.visibility = View.VISIBLE
+    }
+
+    /** Lista de variables; la elegida se inserta donde está el cursor del último campo de texto tocado. */
+    private fun elegirVariable() {
+        val campo = ultimoCampo ?: run { avisar("Elegí primero los contactos"); return }
+        val items = Variables.LISTA.map { "{${it.clave}}  ·  ${it.descripcion}" }.toTypedArray()
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Insertar variable")
+            .setItems(items) { _, i ->
+                val v = "{${Variables.LISTA[i].clave}}"
+                val largo = campo.text.length
+                val ini = campo.selectionStart.takeIf { it in 0..largo } ?: largo
+                val fin = campo.selectionEnd.takeIf { it in 0..largo } ?: largo
+                campo.text.replace(minOf(ini, fin), maxOf(ini, fin), v)
+                campo.requestFocus()
+                campo.setSelection(minOf(ini, fin) + v.length)
+                actualizarVista()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun guardarCamposTexto() {
@@ -170,6 +229,7 @@ class EditarActivity : Activity() {
     private fun mostrarFechaHora() {
         findViewById<Button>(R.id.btnFecha).text = fecha.format(fFecha)
         findViewById<Button>(R.id.btnHora).text = "%02d:%02d".format(hora.hour, hora.minute)
+        actualizarVista()   // {fecha}, {hora}, {dia} y {saludo} dependen de la hora programada
     }
 
     private fun elegirFecha() {

@@ -91,6 +91,23 @@
             android:orientation="vertical"
             android:visibility="gone" />
 
+        <Button
+            android:id="@+id/btnVariable"
+            style="@style/Boton.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="+ Insertar variable ({nombre}, {saludo}…)" />
+
+        <TextView
+            android:id="@+id/txtVista"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/texto2"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
         <TextView
             style="@style/EtiquetaCampo"
             android:text="Fecha y hora" />

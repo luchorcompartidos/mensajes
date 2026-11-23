@@ -207,8 +207,8 @@ class EnviarActivity : Activity() {
                 textSize = 14f
                 setTextColor(getColor(RN.color.texto2))
             })
-            if (e.modo == ModoTexto.POR_CONTACTO) addView(TextView(this@EnviarActivity).apply {
-                text = d.texto
+            if (e.modo == ModoTexto.POR_CONTACTO || Variables.usa(e.texto)) addView(TextView(this@EnviarActivity).apply {
+                text = Variables.aplicar(e.textoPara(d), c)
                 textSize = 14f
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
@@ -245,7 +245,7 @@ class EnviarActivity : Activity() {
                 .show()
             return
         }
-        val error = WhatsApp.abrir(this, c.numeroWhatsapp(), e.textoPara(d), cual)
+        val error = WhatsApp.abrir(this, c.numeroWhatsapp(), Variables.aplicar(e.textoPara(d), c), cual)
         if (error != null) { avisar(error); return }
         esperando = contactoId
         Registro.anotar(this, "#$envioId ${WhatsApp.nombre(cual)} abierto para «${c.etiqueta}»")

@@ -10,6 +10,7 @@ import com.mis.nucleo.Manejador
 import com.mis.nucleo.Notificador
 import com.mis.nucleo.Nucleo
 import com.mis.nucleo.Programador
+import com.mis.nucleo.Tiempo
 
 /** Se crea antes que cualquier pantalla o receiver: deja configurado el núcleo. */
 class AppMensajes : Application() {
@@ -34,10 +35,17 @@ class AppMensajes : Application() {
 object ManejadorMensajes : Manejador {
     fun comoAviso(ctx: Context, e: Envio) = Aviso(
         id = e.id, titulo = Envios.titulo(ctx, e),
-        texto = listOf(Envios.resumenTexto(e), Envios.progreso(e)).filter { it.isNotBlank() }.joinToString("\n"),
+        texto = listOf(resumen(ctx, e), Envios.progreso(e)).filter { it.isNotBlank() }.joinToString("\n"),
         momento = e.momento,
         activo = e.activo, alarma = e.alarma, pospuestoHasta = e.pospuestoHasta
     )
+
+    /** Con un solo contacto y mismo texto, la notificación muestra el mensaje con las variables ya reemplazadas. */
+    private fun resumen(ctx: Context, e: Envio): String {
+        val t = Envios.resumenTexto(e)
+        if (e.modo != ModoTexto.MISMO || e.destinos.size != 1 || !Variables.usa(t)) return t
+        return Variables.aplicar(t, Contactos.obtener(ctx, e.destinos[0].contactoId), Tiempo.zdt(e.momento))
+    }
 
     override fun avisos(ctx: Context): List<Aviso> =
         Envios.todos(ctx).filter { !it.cerrado }.map { comoAviso(ctx, it) }
