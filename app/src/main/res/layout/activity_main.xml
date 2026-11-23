@@ -11,79 +11,62 @@
         android:padding="24dp">
 
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textColor="@color/texto"
-            android:textSize="24sp"
-            android:textStyle="bold" />
-
-        <TextView
             android:id="@+id/version"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/texto2"
-            android:textSize="15sp" />
+            android:textColor="@color/texto3"
+            android:textSize="13sp" />
 
         <TextView
             android:id="@+id/avisoPermiso"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:background="@color/aviso_fondo"
             android:padding="12dp"
             android:textColor="@color/aviso_texto"
             android:textSize="14sp"
             android:visibility="gone" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Prueba del núcleo de alarmas"
-            android:textColor="@color/texto"
-            android:textSize="17sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/estado"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/texto2"
-            android:textSize="14sp" />
-
-        <Button
-            android:id="@+id/btnAviso"
-            style="@style/Boton.Principal"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Probar aviso en 1 minuto" />
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btnAlarma"
+            <Button
+                android:id="@+id/btnNuevo"
+                style="@style/Boton.Principal"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:text="Nuevo envío" />
+
+            <Button
+                android:id="@+id/btnContactos"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Contactos" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/lista"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Probar alarma en 1 minuto" />
-
-        <Button
-            android:id="@+id/btnCancelar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Cancelar prueba" />
+            android:orientation="vertical" />
 
         <TextView
+            android:id="@+id/tituloRegistro"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Registro"
-            android:textColor="@color/texto"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="32dp"
+            android:minHeight="40dp"
+            android:gravity="center_vertical"
+            android:text="Registro de eventos ▸"
+            android:textColor="@color/texto2"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/registro"
@@ -93,14 +76,7 @@
             android:fontFamily="monospace"
             android:textColor="@color/texto3"
             android:textIsSelectable="true"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Próximamente: programar envíos de WhatsApp a uno o más contactos."
-            android:textColor="@color/texto3"
-            android:textSize="14sp" />
+            android:textSize="12sp"
+            android:visibility="gone" />
     </LinearLayout>
 </ScrollView>

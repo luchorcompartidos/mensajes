@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/estadoEnvio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:background="@color/aviso_fondo"
+            android:padding="12dp"
+            android:textColor="@color/aviso_texto"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <TextView
+            style="@style/EtiquetaCampo"
+            android:text="Título (opcional)" />
+
+        <EditText
+            android:id="@+id/edTitulo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Para reconocerlo en la lista"
+            android:inputType="textCapSentences" />
+
+        <TextView
+            style="@style/EtiquetaCampo"
+            android:text="Contactos" />
+
+        <TextView
+            android:id="@+id/txtContactos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/texto"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btnContactos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Elegir contactos" />
+
+        <TextView
+            style="@style/EtiquetaCampo"
+            android:text="Texto" />
+
+        <RadioGroup
+            android:id="@+id/rgModo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/rbMismo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mismo texto para todos"
+                android:textColor="@color/texto" />
+
+            <RadioButton
+                android:id="@+id/rbPorContacto"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Un texto por contacto"
+                android:textColor="@color/texto" />
+        </RadioGroup>
+
+        <EditText
+            android:id="@+id/edTexto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="top"
+            android:hint="Mensaje a enviar"
+            android:inputType="textMultiLine|textCapSentences"
+            android:minLines="3" />
+
+        <LinearLayout
+            android:id="@+id/cajaTextos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <TextView
+            style="@style/EtiquetaCampo"
+            android:text="Fecha y hora" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnFecha"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2" />
+
+            <Button
+                android:id="@+id/btnHora"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <Switch
+            android:id="@+id/swAlarma"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:minHeight="48dp"
+            android:text="Sonar como alarma (pantalla completa)"
+            android:textColor="@color/texto"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btnGuardar"
+            style="@style/Boton.Principal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Guardar y programar" />
+
+        <Button
+            android:id="@+id/btnBorrar"
+            style="@style/Boton.Peligro"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Borrar envío"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

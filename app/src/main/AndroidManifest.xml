@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Solo para "Validar en WA": busca en la agenda el número escrito a mano (no se lista la agenda). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     <!-- Permisos y receivers de alarmas: vienen del manifiesto de :nucleo. -->
     <application
         android:name=".AppMensajes"
@@ -18,6 +21,33 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".EditarActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ContactosActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false" />
+
+        <activity
+            android:name=".PosponerActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/TemaTransparente" />
+
+        <activity
+            android:name=".AlarmaActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.mismensajes.alarma"
+            android:turnScreenOn="true" />
 
     </application>
 </manifest>
