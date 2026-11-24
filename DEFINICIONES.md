@@ -6,6 +6,31 @@
 
 ---
 
+## 0. Apertura automática de WhatsApp (etapa 0.12 → Release Patch v0.0.12; núcleo 0.7.0)
+
+### 0.1 Qué hace
+A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp solo con el chat y el texto ya escritos (falta solo tocar "Enviar"). Con varios contactos, un chat por vez; al volver, "¿Se envió?" y sigue el próximo (como hoy).
+
+### 0.2 Opción
+- Ajustes: **"Abrir WhatsApp automáticamente" — ENCENDIDA por defecto**, se puede apagar. También cambiable en cada envío.
+- Celular bloqueado, sin permiso u opción apagada → como hoy (alarma / notificación).
+- La notificación sale **siempre** igual, como respaldo (si Android bloquea la apertura, la app no se entera).
+
+### 0.3 Permiso "Mostrar sobre otras apps" (`SYSTEM_ALERT_WINDOW`)
+- Se declara en el manifiesto (núcleo). **No se puede otorgar al instalar**: es acceso especial que da el usuario en Ajustes del sistema.
+- La app: detecta si falta (`Settings.canDrawOverlays`); como la opción viene encendida, **avisa con un cartel en la pantalla principal** y lleva directo a la pantalla del permiso (`ACTION_MANAGE_OVERLAY_PERMISSION` con el paquete); vuelve a revisarlo al regresar. En Ajustes: "✓ concedido / ✗ falta [Conceder]". Si Android lo bloquea por app instalada a mano: *Info de la app > ⋮ > Permitir ajustes restringidos*.
+
+### 0.4 Técnica
+- Núcleo genérico: `Permisos` (consultar/pedir overlay) + al disparar el aviso pregunta a la app por `Manejador` qué abrir; si hay permiso, opción activa y no está bloqueado (`KeyguardManager`), lo abre.
+- Apertura desde el receiver con `startActivity` (excepción por permiso overlay); en `PendingIntent`, opt-in `MODE_BACKGROUND_ACTIVITY_START_ALLOWED` (al enviar y al crear: target 35).
+
+### 0.5 Validación
+- Verificar el permiso en el APK compilado.
+- Botón **"Probar apertura automática"** (envío de prueba en 1 minuto) y Registro de cada intento: abierto / no abierto y motivo.
+- Casos en el celular de prueba (**Motorola Moto g84 5G, Android 15**): desbloqueado en inicio; usando otra app; bloqueado; sin permiso; opción apagada; varios contactos; WhatsApp Business.
+
+---
+
 ## A. Importar / exportar con Google Sheets (CSV)
 
 ### A.1 Fuente: solo archivo CSV (por privacidad)
@@ -13,7 +38,7 @@
 - **No** se usa link publicado (los números quedarían públicos). Sin internet, sin login. Sirve también con Excel.
 - Futuro posible (no ahora): Apps Script para sincronizar. Descartado: API de Google con login.
 
-### A.2 Contactos (etapa 0.12) — pantalla Contactos, menú "Importar…" / "Exportar…"
+### A.2 Contactos (etapa 0.13) — pantalla Contactos, menú "Importar…" / "Exportar…"
 | Columna | Obligatoria | Uso |
 |---|---|---|
 | `numero` | sí | Se normaliza como hoy (`numeroWhatsapp`, 549…). |
@@ -24,7 +49,7 @@
 - **Duplicados** (mismo número normalizado): se **actualiza el nombre** sin preguntar. Solo cambia la lista de contactos **de la app** (no la agenda de Android ni WhatsApp). Efecto: los envíos no enviados muestran y usan en `{nombre}` el nombre nuevo (los envíos guardan el contacto, no el nombre).
 - **Exportar contactos a CSV**: mismas columnas; el archivo se comparte o se guarda con el selector de Android (respaldo o para armar la planilla).
 
-### A.3 Envíos (etapa 0.13) — pantalla principal, "Importar envíos"
+### A.3 Envíos (etapa 0.14) — pantalla principal, "Importar envíos"
 | titulo | fecha | hora | numero | texto |
 |---|---|---|---|---|
 | Recordatorio turno | 02/12/2026 | 18:30 | 3514445566 | Hola {nombre}, te recuerdo el turno |
@@ -42,7 +67,7 @@
 
 ---
 
-## B. SMS (etapa 0.14)
+## B. SMS (etapa 0.15)
 
 ### B.1 Canal: por contacto, como Recordatorios
 - Cada contacto tiene modo: **WhatsApp / SMS / Ambos** (los existentes quedan en WhatsApp).
@@ -74,8 +99,9 @@ Se llevan al núcleo (`Sms.kt`) las funciones de Recordatorios (`Envios.medir`, 
 
 ## C. Orden de etapas
 1. Probar la v0.0.11 (pendiente).
-2. **0.12** — Importar y exportar contactos (CSV).
-3. **0.13** — Importar envíos (CSV).
-4. **0.14** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo).
-5. Después: variables desde la planilla, elegir SIM, Apps Script.
+2. **0.12** — Apertura automática de WhatsApp (sección 0) → Patch v0.0.12.
+3. **0.13** — Importar y exportar contactos (CSV).
+4. **0.14** — Importar envíos (CSV).
+5. **0.15** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo).
+6. Después: variables desde la planilla, elegir SIM, Apps Script.
 - Migración de Recordatorios al núcleo: **por ahora no**.

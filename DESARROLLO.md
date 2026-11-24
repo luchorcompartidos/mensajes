@@ -24,12 +24,12 @@
 - "Enviar ahora" en un envío que se repite pide confirmación y adelanta la próxima vez (la separa y la abre para enviar).
 - La lista muestra 🔁 y la regla (con "N/L veces" si tiene límite).
 - **A probar en el celular:** v0.0.11 + lo pendiente de la v0.0.5 a v0.0.10.
-- En curso: —. Definiciones de Google Sheets y SMS **confirmadas** en `DEFINICIONES.md`; próxima etapa: **0.12**.
+- En curso: —. Definiciones de Google Sheets y SMS **confirmadas** en `DEFINICIONES.md`; próxima etapa: **0.12 — apertura automática de WhatsApp** (nunca se había implementado: quedó como propuesta en un chat y no se anotó).
 
 ## 3. Próximos pasos
 1. **Probar la v0.0.11** (incluye lo de la v0.0.5 a v0.0.10) en el celular y corregir lo que aparezca.
-2. **Etapa 0.12 — Importar y exportar contactos (CSV)**, según `DEFINICIONES.md` A.1, A.2 y A.4.
-3. **0.13 — Importar envíos (CSV)** (A.3) y **0.14 — SMS** (B).
+2. **Etapa 0.12 — Apertura automática de WhatsApp** (`DEFINICIONES.md` sección 0) → Release **Patch v0.0.12**, núcleo 0.7.0.
+3. **0.13 — Importar y exportar contactos (CSV)** (A), **0.14 — Importar envíos (CSV)** (A.3) y **0.15 — SMS** (B).
 4. Migrar Recordatorios al núcleo: por ahora no (decisión 24-11). A definir: grupo Default como lista.
 
 ## 4. Decisiones tomadas
@@ -65,6 +65,7 @@
 - 2026-11-24 Google Sheets: **solo archivo CSV** (sin link publicado, por privacidad). Orden: contactos (importar + exportar) → envíos → SMS. Duplicados por número: se actualiza el nombre solo en la app (no agenda ni WhatsApp). Detalle en `DEFINICIONES.md`.
 - 2026-11-24 SMS: modo **por contacto** (WhatsApp/SMS/Ambos, como Recordatorios), ajustable por destinatario **solo para cada envío**; por defecto **"Preguntar antes"** (automático opcional, con control de tamaño al guardar); largo y costo **igual que Recordatorios** (funciones llevadas al núcleo `Sms.kt`) + contador corto en el editor.
 - 2026-11-24 Migración de Recordatorios al núcleo: por ahora no.
+- 2026-11-24 Apertura automática de WhatsApp (permiso "Mostrar sobre otras apps", que da el usuario: no se puede otorgar al instalar): **encendida por defecto**, se apaga en Ajustes o por envío; mecanismo en el núcleo, qué abrir en la app; notificación siempre como respaldo. Va **antes de Sheets**. Celular de prueba: Moto g84 5G, Android 15.
 - 2026-11-23 "Usar plantilla" / "Guardar como plantilla" trabajan sobre el último campo de texto tocado (igual que "Insertar variable"); "Agregar" va al final, en renglón nuevo; no se guardan dos plantillas con el mismo texto.
 
 ## 5. Pendientes / dudas abiertas
@@ -95,7 +96,7 @@
 - 2026-11-23: Etapa 0.9: núcleo movido a `luchorcompartidos/nucleo-android` (submódulo `nucleo/`, `submodules: true` en Actions) → sin Release (compilación de prueba, OK).
 - 2026-11-24: Etapa 0.10: listas de contactos (ABM en Contactos, "Usar lista" / "Guardar como lista" en el envío) → Release **v0.0.10** (patch).
 - 2026-11-24: Etapa 0.11: repetición de envíos (regla en el núcleo 0.6.0, cada vez separada en un envío aparte, "Enviar ahora" adelanta la vez) → Release **v0.0.11** (patch).
-- 2026-11-24: Definiciones de Google Sheets (CSV) y SMS en `DEFINICIONES.md`, propuestas y confirmadas → sin Release (solo documentación).
+- 2026-11-24: Definiciones de Google Sheets (CSV) y SMS en `DEFINICIONES.md`, propuestas y confirmadas; definida la apertura automática de WhatsApp (etapa 0.12) → sin Release (solo documentación).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*
