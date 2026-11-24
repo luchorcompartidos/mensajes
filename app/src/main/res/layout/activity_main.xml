@@ -108,6 +108,15 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:text="Plantillas" />
+
+            <!-- Importar envíos desde un CSV (Google Sheets: Archivo > Descargar > CSV). -->
+            <Button
+                android:id="@+id/btnImportar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Importar" />
         </LinearLayout>
 
         <LinearLayout

@@ -42,6 +42,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnPlantillas).setOnClickListener {
             startActivity(Intent(this, PlantillasActivity::class.java))
         }
+        findViewById<Button>(R.id.btnImportar).setOnClickListener { ayudaImportar() }
         findViewById<TextView>(R.id.btnAjustes).setOnClickListener {
             startActivity(Intent(this, AjustesActivity::class.java))
         }
@@ -74,6 +75,37 @@ class MainActivity : Activity() {
             visibility = View.VISIBLE
             setOnClickListener { VersionGitHub.dialogo(this@MainActivity, temaDialogo()) }
         }
+    }
+
+    /** Formato del archivo y, después, el selector de archivos de Android (sin permisos). */
+    private fun ayudaImportar() {
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Importar envíos (CSV)")
+            .setMessage("Elegí un archivo CSV (Google Sheets: Archivo > Descargar > CSV; también sirve Excel o Drive).\n\n" +
+                "Una fila por destinatario. Las filas con el mismo título, fecha y hora forman un envío.\n\n" +
+                "Columnas: titulo, fecha (dd/mm/aaaa), hora (hh:mm), numero (o nombre de un contacto), texto.\n" +
+                "Opcionales: alarma (sí/no), repeticion (diaria, semanal, mensual, anual) y veces (terminar después de X veces).\n\n" +
+                "Antes de importar se muestra una vista previa. Se suma y se actualiza; no se borra nada.")
+            .setPositiveButton("Elegir archivo") { _, _ ->
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/comma-separated-values",
+                        "text/plain", "application/csv", "application/vnd.ms-excel", "application/octet-stream"))
+                }, PEDIDO_IMPORTAR)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    override fun onActivityResult(pedido: Int, resultado: Int, datos: Intent?) {
+        super.onActivityResult(pedido, resultado, datos)
+        val uri = datos?.data
+        if (pedido == PEDIDO_IMPORTAR && resultado == RESULT_OK && uri != null) vistaPreviaEnvios(uri) { actualizar() }
+    }
+
+    private companion object {
+        const val PEDIDO_IMPORTAR = 21
     }
 
     override fun onRequestPermissionsResult(codigo: Int, permisos: Array<out String>, resultados: IntArray) {

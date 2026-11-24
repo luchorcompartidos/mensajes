@@ -14,7 +14,7 @@ import java.nio.charset.CodingErrorAction
 import java.text.Normalizer
 
 /**
- * Lector y escritor de CSV (etapa 0.13, `DEFINICIONES.md` A.4).
+ * Lector y escritor de CSV (etapas 0.13 y 0.14, `DEFINICIONES.md` A.4).
  * - Separador `,`, `;` o tabulación, detectado solo en la primera fila.
  * - Comillas con separadores, comillas dobles ("") y saltos de línea adentro, respetados.
  * - Archivo en UTF-8 (con o sin BOM) o, si no lo es, Windows-1252 (CSV de Excel en castellano).
@@ -91,7 +91,7 @@ object CsvContactos {
     private val COL_NOMBRE = setOf("nombre")
     private val COL_LISTA = setOf("lista", "listas")
     private val COL_DEFAULT = setOf("default", "grupo default")
-    private val SI = setOf("si", "s", "x", "1", "true", "verdadero", "yes")
+    val SI = setOf("si", "s", "x", "1", "true", "verdadero", "yes")
 
     data class Fila(val fila: Int, val numero: String, val nombre: String, val listas: List<String>,
                     val porDefecto: Boolean, val existente: Contacto?)
@@ -202,40 +202,52 @@ object CsvContactos {
     }
 }
 
-/** Vista previa de la importación: "N nuevos · M ya existen · K con error" + detalle → Importar / Cancelar. */
-fun Activity.vistaPreviaImportacion(uri: Uri, alImportar: () -> Unit) {
-    val texto = runCatching { contentResolver.openInputStream(uri)?.use { Csv.decodificar(it.readBytes()) } }.getOrNull()
-    if (texto == null) { avisar("No se pudo leer el archivo"); return }
-    val a = CsvContactos.analizar(this, texto)
+/** Lee el archivo elegido con el selector de Android (UTF-8 o Windows-1252); null si no se pudo. */
+fun Activity.leerCsv(uri: Uri): String? =
+    runCatching { contentResolver.openInputStream(uri)?.use { Csv.decodificar(it.readBytes()) } }.getOrNull()
+
+/** Agrega "Título:\n• a\n• b" a [sb] (hasta 50 renglones); nada si [l] está vacía. */
+fun bloqueCsv(sb: StringBuilder, titulo: String, l: List<String>) {
+    if (l.isEmpty()) return
+    sb.append("\n\n").append(titulo).append(":\n")
+    l.take(50).forEach { sb.append("• ").append(it).append('\n') }
+    if (l.size > 50) sb.append("… y ${l.size - 50} más\n")
+}
+
+/** Diálogo de vista previa común a las importaciones: detalle desplazable → Importar / Cancelar. */
+fun Activity.dialogoImportacion(titulo: String, detalle: String, hayAlgo: Boolean,
+                                importar: () -> String, alImportar: () -> Unit) {
     val dp = resources.displayMetrics.density
-    val detalle = StringBuilder()
-    if (a.errorGeneral != null) detalle.append(a.errorGeneral)
-    else {
-        detalle.append("${a.nuevos} nuevo(s) · ${a.existentes} ya existen (se actualiza el nombre) · ${a.errores.size} con error")
-        if (a.listasNuevas.isNotEmpty()) detalle.append("\n\nListas nuevas: ").append(a.listasNuevas.joinToString(", "))
-        fun bloque(titulo: String, l: List<String>) {
-            if (l.isEmpty()) return
-            detalle.append("\n\n").append(titulo).append(":\n")
-            l.take(50).forEach { detalle.append("• ").append(it).append('\n') }
-            if (l.size > 50) detalle.append("… y ${l.size - 50} más\n")
-        }
-        bloque("Errores (esas filas no se importan)", a.errores)
-        bloque("Revisar", a.avisos)
-        detalle.append("\n\nSe suma y se actualiza; no se borra ningún contacto ni lista.")
-    }
     val vista = ScrollView(this).apply {
-        addView(TextView(this@vistaPreviaImportacion).apply {
-            text = detalle.toString().trimEnd()
+        addView(TextView(this@dialogoImportacion).apply {
+            text = detalle.trimEnd()
             textSize = 14f
             setPadding((22 * dp).toInt(), (12 * dp).toInt(), (22 * dp).toInt(), 0)
             setTextIsSelectable(true)
         })
     }
-    val b = AlertDialog.Builder(this, temaDialogo()).setTitle("Importar contactos").setView(vista)
-    if (a.filas.isEmpty()) b.setPositiveButton("Cerrar", null)
+    val b = AlertDialog.Builder(this, temaDialogo()).setTitle(titulo).setView(vista)
+    if (!hayAlgo) b.setPositiveButton("Cerrar", null)
     else b.setPositiveButton("Importar") { _, _ ->
-        avisar("Importado: " + CsvContactos.importar(this, a))
+        avisar("Importado: " + importar())
         alImportar()
     }.setNegativeButton("Cancelar", null)
     b.show()
+}
+
+/** Vista previa de la importación de contactos: "N nuevos · M ya existen · K con error" + detalle. */
+fun Activity.vistaPreviaImportacion(uri: Uri, alImportar: () -> Unit) {
+    val texto = leerCsv(uri) ?: run { avisar("No se pudo leer el archivo"); return }
+    val a = CsvContactos.analizar(this, texto)
+    val detalle = StringBuilder()
+    if (a.errorGeneral != null) detalle.append(a.errorGeneral)
+    else {
+        detalle.append("${a.nuevos} nuevo(s) · ${a.existentes} ya existen (se actualiza el nombre) · ${a.errores.size} con error")
+        if (a.listasNuevas.isNotEmpty()) detalle.append("\n\nListas nuevas: ").append(a.listasNuevas.joinToString(", "))
+        bloqueCsv(detalle, "Errores (esas filas no se importan)", a.errores)
+        bloqueCsv(detalle, "Revisar", a.avisos)
+        detalle.append("\n\nSe suma y se actualiza; no se borra ningún contacto ni lista.")
+    }
+    dialogoImportacion("Importar contactos", detalle.toString(), a.filas.isNotEmpty(),
+        { CsvContactos.importar(this, a) }, alImportar)
 }

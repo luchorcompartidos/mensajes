@@ -51,13 +51,18 @@ A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp sol
 - Implementado (`Csv.kt`): el número se guarda normalizado (solo dígitos, 549…); `default` solo **marca** ("sí", "x", "1", TRUE de casilla de Sheets), no desmarca; nombre vacío no borra el nombre existente; encabezados alternativos `telefono`/`celular`/`whatsapp` y `listas`. Número repetido en el archivo = error de esa fila; número en formato científico (`5,49E+12`, típico de Excel) = error con ayuda; 10 dígitos o menos = aviso "¿sin código de país?" (se importa igual). Archivo UTF-8 o Windows-1252 (Excel).
 - Exportar: se guarda con el selector de Android (ahí aparece también Google Drive); UTF-8 con BOM, separador `,`, `default` = sí/no. No hay botón "Compartir" aparte (necesitaría un proveedor de archivos; a sumar si hace falta).
 
-### A.3 Envíos (etapa 0.14) — pantalla principal, "Importar envíos"
-| titulo | fecha | hora | numero | texto |
-|---|---|---|---|---|
-| Recordatorio turno | 02/12/2026 | 18:30 | 3514445566 | Hola {nombre}, te recuerdo el turno |
+### A.3 Envíos (etapa 0.14 → Release Patch v0.0.14) — pantalla principal, botón "Importar" — **implementada**
+| titulo | fecha | hora | numero | texto | alarma | repeticion | veces |
+|---|---|---|---|---|---|---|---|
+| Recordatorio turno | 02/12/2026 | 18:30 | 3514445566 | Hola {nombre}, te recuerdo el turno | sí | semanal | 4 |
 - Una fila por destinatario. Filas con mismo `titulo` + `fecha` + `hora` = un envío. Textos iguales → "mismo texto"; distintos → "un texto por contacto".
-- `numero` o `nombre` de un contacto existente; los números nuevos se crean como contactos.
-- Variables iguales que en la app. Columnas extra a definir en la etapa: `alarma`, `repeticion`.
+- `numero` o `nombre` de un contacto existente (si hay dos con ese nombre: error, poner el número); los números nuevos se crean como contactos con el `nombre` de la fila. Los contactos que ya existen **conservan su nombre**.
+- Variables iguales que en la app. Obligatorias: `fecha`, `hora`, `texto` y `numero` o `nombre`; `titulo` opcional.
+- **Opcionales** (decisión 24-11): `alarma` sí/no (vacía = la de Ajustes); `repeticion` diaria / semanal / mensual / anual / no (semanal, mensual y anual toman el día de la `fecha`); `veces` = terminar después de X veces (solo si se repite). Se toman de la primera fila del envío que las tenga (aviso si otra fila dice otra cosa).
+- **Ya existe** (mismo título, fecha y hora, sin cerrar): se **actualiza** (decisión 24-11): se suman los destinatarios nuevos y los pendientes toman el texto del archivo; los ya enviados no cambian. `alarma`/`repeticion` solo se cambian si vienen en el archivo y el envío sigue programado. Nunca se borra nada.
+- Errores: fecha/hora inválidas, sin texto, número inválido o en formato científico, contacto inexistente, destinatario repetido en el mismo envío, fecha ya pasada (sin repetición), repetición o veces no reconocidas. Con repetición y fecha pasada: empieza en la próxima vez (aviso).
+- Formatos aceptados: fecha `dd/mm/aaaa` (también `d/m/aa`, `-` o `.`, y `aaaa-mm-dd`); hora `hh:mm` (también `hh:mm:ss`, `18.30` o `6:30 p. m.`).
+- Implementado en `CsvEnvios.kt` (usa `Csv` y el diálogo común `dialogoImportacion` de `Csv.kt`).
 
 ### A.4 Reglas del lector
 - Primera fila = encabezados, sin importar mayúsculas, tildes ni orden; columnas desconocidas se ignoran.

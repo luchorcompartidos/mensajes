@@ -14,20 +14,19 @@
 | URL publicada | APK: https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk |
 | Tipo | Android APK (Kotlin nativo, compilado en GitHub Actions) |
 | Estado | En desarrollo |
-| Última versión (Release) | **v0.0.13** (24-11-2026) |
+| Última versión (Release) | **v0.0.14** (24-11-2026) |
 | Se conecta con | WhatsApp (por intent, sin API) · núcleo `luchorcompartidos/nucleo-android` (submódulo `nucleo/`) · a futuro Google Sheets |
 
 ## 2. Etapa actual
-**Etapa 0.13 — Importar y exportar contactos (CSV): cerrada** → Release **v0.0.13** (patch). Sin cambios en el núcleo.
-- Contactos → menú ⋮ → **"Importar…"**: selector de archivos de Android (CSV de Sheets *Archivo > Descargar > CSV*, Excel o Drive). Columnas `numero` (obligatoria), `nombre`, `lista` (varias con `,`), `default`. **Vista previa**: "N nuevos · M ya existen · K con error" + listas nuevas + errores y avisos por fila → Importar / Cancelar. Suma y actualiza, nunca borra.
-- **"Exportar…"**: guarda `contactos-mensajes-AAAA-MM-DD.csv` con el selector (ahí aparece Drive); mismas columnas, listo para reimportar.
-- Detalle de reglas (normalización, `default` solo marca, formato científico, aviso sin código de país, UTF-8/Windows-1252): `DEFINICIONES.md` A.2.
-- **A probar en el celular:** v0.0.13 (exportar → abrir en Sheets → editar → descargar CSV → importar; probar con Excel y separador `;`; duplicados y errores) + lo pendiente de la v0.0.5 a v0.0.12.
+**Etapa 0.14 — Importar envíos (CSV): cerrada** → Release **v0.0.14** (patch). Sin cambios en el núcleo.
+- Pantalla principal → botón **"Importar"**: ayuda con el formato → selector de archivos. Columnas `titulo`, `fecha`, `hora`, `numero` (o `nombre` de un contacto), `texto` + opcionales `alarma`, `repeticion`, `veces`. **Vista previa**: "N nuevos · M ya existen (se actualizan) · K con error" + contactos nuevos + lista de envíos + errores y avisos → Importar / Cancelar.
+- Detalle de reglas: `DEFINICIONES.md` A.3.
+- **A probar en el celular:** v0.0.14 (envío con varios destinatarios, mismo texto y textos distintos, número nuevo, nombre de contacto, repetición semanal con `veces`, reimportar el mismo archivo con un destinatario más, fecha pasada) + lo pendiente de la v0.0.5 a v0.0.13.
 - En curso: —. **Pendiente del usuario:** tag **v0.7.0** del núcleo (ver DESARROLLO.md de `nucleo-android`).
 
 ## 3. Próximos pasos
-1. **Probar la v0.0.13** (importar/exportar CSV) y la v0.0.12 (apertura automática: casos de `DEFINICIONES.md` 0.5; incluye lo de la v0.0.5 a v0.0.11) en el celular y corregir lo que aparezca.
-2. **0.14 — Importar envíos (CSV)** (`DEFINICIONES.md` A.3; reutiliza `Csv.kt`) y **0.15 — SMS** (B).
+1. **Probar la v0.0.14** (importar envíos) y la v0.0.13 (importar/exportar contactos) y la v0.0.12 (apertura automática; `DEFINICIONES.md` 0.5), con lo de la v0.0.5 a v0.0.11, y corregir lo que aparezca.
+2. **0.15 — SMS** (`DEFINICIONES.md` B; suma la columna `modo` al CSV de contactos).
 3. Migrar Recordatorios al núcleo: por ahora no (decisión 24-11). A definir: grupo Default como lista.
 
 ## 4. Decisiones tomadas
@@ -66,10 +65,12 @@
 - 2026-11-24 CSV de contactos en `:app` (no en el núcleo): Recordatorios no lo tiene. Importar = selector de Android (`ACTION_OPEN_DOCUMENT`, sin permisos); exportar = `ACTION_CREATE_DOCUMENT`. `default` solo marca; nombre vacío no pisa el existente.
 - 2026-11-24 Apertura automática de WhatsApp (permiso "Mostrar sobre otras apps", que da el usuario: no se puede otorgar al instalar): **encendida por defecto**, se apaga en Ajustes o por envío; mecanismo en el núcleo, qué abrir en la app; notificación siempre como respaldo. Va **antes de Sheets**. Celular de prueba: Moto g84 5G, Android 15.
 - 2026-11-24 Apertura automática implementada: la pantalla de envío es la que se abre (no WhatsApp directo), así sigue el "¿Se envió?"; en modo automático encadena los contactos tras "Sí, enviado". También al sonar una posposición. La prueba sigue la opción de Ajustes (para probar también "apagada").
+- 2026-11-24 Importar envíos (CSV): columnas opcionales `alarma` (sí/no), `repeticion` simple (diaria/semanal/mensual/anual, con el día de la fecha) y `veces`; si el envío ya existe (mismo título, fecha y hora, sin cerrar) se **actualiza** (suma destinatarios, actualiza textos pendientes). Botón "Importar" en la principal; código en `CsvEnvios.kt`.
 - 2026-11-23 "Usar plantilla" / "Guardar como plantilla" trabajan sobre el último campo de texto tocado (igual que "Insertar variable"); "Agregar" va al final, en renglón nuevo; no se guardan dos plantillas con el mismo texto.
 
 ## 5. Pendientes / dudas abiertas
-- [ ] Probar en el celular la v0.0.13 y la v0.0.12 (incluye lo de la v0.0.5 a v0.0.11; ver sección 2).
+- [ ] Probar en el celular la v0.0.14, v0.0.13 y v0.0.12 (incluye lo de la v0.0.5 a v0.0.11; ver sección 2).
+- [ ] ¿Exportar envíos a CSV (respaldo / para editar en la planilla)? No pedido todavía.
 - [ ] ¿Sumar "Compartir" al exportar (necesita un proveedor de archivos propio, sin AndroidX)? Hoy se guarda con el selector (incluye Drive).
 - [ ] Crear el tag v0.7.0 del núcleo.
 - [ ] Futuro: columnas extra de la planilla como variables por contacto (`DEFINICIONES.md` A.4).
@@ -77,7 +78,7 @@
 - [ ] ¿Pasar el grupo Default a ser una lista más?
 
 ## 6. Datos técnicos clave
-- Definiciones de funciones grandes: `DEFINICIONES.md`. Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`, `autoAbrir`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes", incluye "auto_abrir"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + apertura automática + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`), `Csv.kt` (`Csv`: leer/escribir CSV; `CsvContactos`: analizar/importar/exportar; `vistaPreviaImportacion`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`), `Apertura.kt` (`Apertura`: permiso de superposición, bloqueo, apertura al vencer); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
+- Definiciones de funciones grandes: `DEFINICIONES.md`. Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`, `autoAbrir`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes", incluye "auto_abrir"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + apertura automática + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`), `Csv.kt` (`Csv`: leer/escribir CSV; `CsvContactos`: analizar/importar/exportar; `leerCsv`, `dialogoImportacion`, `vistaPreviaImportacion`), `CsvEnvios.kt` (`CsvEnvios`: analizar/importar envíos; `vistaPreviaEnvios`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`), `Apertura.kt` (`Apertura`: permiso de superposición, bloqueo, apertura al vencer); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
 - Requisitos heredados: minSdk 34 (Android 14), compileSdk/targetSdk 35. Permisos de alarmas (`POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT`, `SYSTEM_ALERT_WINDOW`) y receivers declarados en el manifiesto de `:nucleo`; `INTERNET` (Releases de GitHub) también en `:nucleo`; `READ_CONTACTS` en el manifiesto de `:app` (solo para validar); falta `SEND_SMS` (solo con SMS automático).
 - Configuración / servicios: Secrets `KEYSTORE_B64` y `KEYSTORE_PASS` cargados (los mismos de Recordatorios; alias `recordatorios`, o el Secret `KEYSTORE_ALIAS` si se cambia la clave). Respaldo: `secretos-github.txt` del chat "Recordatorios PWA vs app nativa" (14-11-2026).
 - Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`, checkout con submódulos) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
@@ -101,6 +102,7 @@
 - 2026-11-24: Definiciones de Google Sheets (CSV) y SMS en `DEFINICIONES.md`, propuestas y confirmadas; definida la apertura automática de WhatsApp (etapa 0.12) → sin Release (solo documentación).
 - 2026-11-24: Etapa 0.12: apertura automática de WhatsApp (núcleo 0.7.0 `Apertura`, opción en Ajustes y por envío, cartel de permiso, prueba en 1 minuto, Registro) → Release **v0.0.12** (patch).
 - 2026-11-24: Etapa 0.13: importar contactos desde CSV con vista previa y exportar a CSV (`Csv.kt`, menú ⋮ de Contactos) → Release **v0.0.13** (patch).
+- 2026-11-24: Etapa 0.14: importar envíos desde CSV (botón "Importar" en la principal, `CsvEnvios.kt`, alarma/repetición/veces, actualiza los existentes) → Release **v0.0.14** (patch).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*
