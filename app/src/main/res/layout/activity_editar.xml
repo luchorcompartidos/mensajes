@@ -156,6 +156,18 @@
             android:textSize="13sp"
             android:visibility="gone" />
 
+        <!-- Largo del SMS (solo si algún destinatario va por SMS); al tocarlo, el detalle. -->
+        <TextView
+            android:id="@+id/txtSms"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:textColor="@color/texto2"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
         <TextView
             style="@style/EtiquetaCampo"
             android:text="Fecha y hora" />

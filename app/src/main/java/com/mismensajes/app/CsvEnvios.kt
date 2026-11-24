@@ -250,6 +250,9 @@ object CsvEnvios {
         }
         if (a.contactosNuevos.isNotEmpty()) Contactos.guardarTodos(ctx, contactos)
         fun idDe(d: CsvEnvios.Dest) = if (d.contactoId > 0) d.contactoId else idNuevo.getValue(d.numeroNuevo)
+        // Cada destinatario arranca con el modo de su contacto (WhatsApp / SMS / ambos).
+        val modoDe = contactos.associate { it.id to it.modo }
+        fun destino(id: Int) = Destino(id, canal = modoDe[id] ?: ModoEnvio.WHATSAPP)
 
         // 2. Envíos.
         var creados = 0; var actualizados = 0
@@ -257,7 +260,7 @@ object CsvEnvios {
             val desdeArchivo = g.dests.associate { idDe(it) to it.texto }
             val actual = g.existente?.let { Envios.obtener(ctx, it.id) }?.takeIf { !it.cerrado }
             if (actual == null) {
-                val (modo, texto, destinos) = armar(desdeArchivo.map { (id, t) -> Destino(id) to t })
+                val (modo, texto, destinos) = armar(desdeArchivo.map { (id, t) -> destino(id) to t })
                 val e = Envio(id = Envios.nuevoId(ctx), titulo = g.titulo, modo = modo, texto = texto, destinos = destinos,
                     momento = g.momento, alarma = g.alarma ?: Ajustes.alarmaPorDefecto(ctx), regla = g.regla)
                 Envios.guardar(ctx, e)
@@ -267,11 +270,11 @@ object CsvEnvios {
             } else {
                 // Los ya enviados conservan su texto; los pendientes toman el del archivo; los nuevos se suman al final.
                 val previos = actual.destinos.map { d ->
-                    val t = if (!d.enviado && d.contactoId in desdeArchivo) desdeArchivo.getValue(d.contactoId) else actual.textoPara(d)
+                    val t = if (!d.listo && d.contactoId in desdeArchivo) desdeArchivo.getValue(d.contactoId) else actual.textoPara(d)
                     d to t
                 }
                 val sumados = desdeArchivo.filterKeys { id -> actual.destinos.none { it.contactoId == id } }
-                    .map { (id, t) -> Destino(id) to t }
+                    .map { (id, t) -> destino(id) to t }
                 val (modo, texto, destinos) = armar(previos + sumados)
                 var e = actual.copy(modo = modo, texto = texto, destinos = destinos)
                 if (actual.activo) {

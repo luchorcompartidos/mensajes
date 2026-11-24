@@ -74,7 +74,9 @@ A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp sol
 
 ---
 
-## B. SMS (etapa 0.15)
+## B. SMS (etapa 0.15) — **parte A implementada** (v0.0.15, núcleo 0.8.0); falta la parte B (v0.0.16)
+Parte A: B.1, B.2 "Preguntar antes" con marca automática, B.3 en el editor (contador + detalle), B.4 permiso y datos, columna `modo` del CSV de contactos.
+Parte B: B.2 "Automático" y "Reintentar" / "Abrir app de SMS"; B.3 control "se dividiría en N partes" al enviar y al guardar (automático), "Convertir caracteres", Ajustes (interruptor general + SMS de prueba).
 
 ### B.1 Canal: por contacto, como Recordatorios
 - Cada contacto tiene modo: **WhatsApp / SMS / Ambos** (los existentes quedan en WhatsApp).
@@ -108,7 +110,7 @@ Se llevan al núcleo (`Sms.kt`) las funciones de Recordatorios (`Envios.medir`, 
 1. Probar la v0.0.11 (pendiente).
 2. **0.12** — Apertura automática de WhatsApp (sección 0) → Patch v0.0.12.
 3. **0.13** — Importar y exportar contactos (CSV) → Patch v0.0.13 (**hecha**).
-4. **0.14** — Importar envíos (CSV).
-5. **0.15** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo).
+4. **0.14** — Importar envíos (CSV) (**hecha**).
+5. **0.15** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo): parte A **hecha** (v0.0.15); parte B → v0.0.16.
 6. Después: variables desde la planilla, elegir SIM, Apps Script.
 - Migración de Recordatorios al núcleo: **por ahora no**.

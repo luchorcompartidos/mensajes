@@ -58,7 +58,7 @@ class ContactosActivity : Activity() {
                 "número en la agenda del celular para traer el nombre y ver si tiene WhatsApp.\n" +
                 "Casilla = forma parte del grupo Default: esos contactos se eligen solos en cada envío nuevo.\n" +
                 "Menú ⋮ → «Importar…» / «Exportar…»: contactos desde o hacia un archivo CSV (Google Sheets: " +
-                "Archivo > Descargar > CSV). Columnas: numero, nombre, lista, default."
+                "Archivo > Descargar > CSV). Columnas: numero, nombre, lista, default, modo (whatsapp, sms o ambos)."
             textSize = 13f
             setTextColor(getColor(RN.color.texto2))
             setPadding(0, (12 * dp).toInt(), 0, (8 * dp).toInt())
@@ -161,7 +161,7 @@ class ContactosActivity : Activity() {
                     setOnCheckedChangeListener { _, v -> Contactos.marcarDefault(this@ContactosActivity, c.id, v) }
                 })
                 addView(TextView(this@ContactosActivity).apply {
-                    text = "${c.etiqueta}\n${c.numero}"
+                    text = "${c.etiqueta}\n${c.numero}" + if (c.modo != ModoEnvio.WHATSAPP) " · ${c.modo.corto}" else ""
                     textSize = 15f
                     setTextColor(getColor(RN.color.texto))
                     setPadding((4 * dp).toInt(), (6 * dp).toInt(), 0, (6 * dp).toInt())
@@ -220,6 +220,15 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
         text = "Forma parte del grupo Default (se elige solo en cada envío nuevo)"
         isChecked = actual?.porDefecto ?: false
     }
+    // Por dónde se le manda (en cada envío se puede cambiar solo para ese envío).
+    val tituloModo = TextView(c).apply { text = "Enviarle por:"; textSize = 13f; setPadding(0, m / 2, 0, 0) }
+    val modos = android.widget.RadioGroup(c).apply {
+        orientation = android.widget.RadioGroup.VERTICAL
+        ModoEnvio.entries.forEachIndexed { i, modo ->
+            addView(android.widget.RadioButton(c).apply { id = 9100 + i; text = modo.texto })
+        }
+        check(9100 + (actual?.modo ?: ModoEnvio.WHATSAPP).ordinal)
+    }
     val validar = Button(c).apply {
         text = "Validar en WA y recuperar"
         setOnClickListener {
@@ -241,11 +250,12 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
     val caja = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(m, m / 2, m, 0)
-        addView(nombre); addView(numero); addView(validar); addView(resultadoWa); addView(porDefecto); addView(ayuda)
+        addView(nombre); addView(numero); addView(validar); addView(resultadoWa); addView(tituloModo); addView(modos)
+        addView(porDefecto); addView(ayuda)
     }
     val b = AlertDialog.Builder(this, temaDialogo())
         .setTitle(if (actual == null) "Agregar contacto" else "Editar contacto")
-        .setView(caja)
+        .setView(ScrollView(c).apply { addView(caja) })
         .setPositiveButton("Guardar") { _, _ ->
             val num = numero.text.toString().trim()
             if (num.filter { it.isDigit() }.length < 6) { avisar("Falta el número (con código de país)"); return@setPositiveButton }
@@ -254,7 +264,8 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
                 avisar("Ya existe un contacto con ese número: ${it.etiqueta}")
                 return@setPositiveButton
             }
-            val nuevo = Contacto(id, nombre.text.toString().trim(), num, porDefecto.isChecked)
+            val modo = ModoEnvio.entries.getOrElse(modos.checkedRadioButtonId - 9100) { ModoEnvio.WHATSAPP }
+            val nuevo = Contacto(id, nombre.text.toString().trim(), num, porDefecto.isChecked, modo)
             Contactos.guardar(this, nuevo)
             alGuardar(nuevo)
         }

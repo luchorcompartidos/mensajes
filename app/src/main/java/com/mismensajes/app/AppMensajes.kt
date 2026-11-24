@@ -80,16 +80,28 @@ object ManejadorMensajes : Manejador {
             ?.let { Envios.guardar(ctx, it.copy(cerrado = true)) }
     }
 
-    /** Botón "Enviar" (mientras quede alguien sin enviar): abre la pantalla de envío. */
+    /**
+     * Botón "Enviar" (mientras quede alguien sin enviar por WhatsApp): abre la pantalla de envío.
+     * Botón "Enviar SMS" (mientras quede algún SMS): manda todos los SMS del envío.
+     * Con los dos, Android muestra 3 botones: "Posponer…" queda en la pantalla de alarma y al tocar la notificación.
+     */
     override fun accionesExtra(ctx: Context, a: Aviso): List<Notification.Action> {
         val e = Envios.obtener(ctx, a.id) ?: return emptyList()
-        if (e.cerrado || e.pendientes.isEmpty()) return emptyList()
-        val pi = PendingIntent.getActivity(ctx, a.id + 2_000_000,
-            Intent(ctx, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, a.id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        return listOf(Notificador.boton(ctx, "Enviar", pi))
+        if (e.cerrado) return emptyList()
+        val botones = mutableListOf<Notification.Action>()
+        if (e.pendientes.isNotEmpty()) {
+            val pi = PendingIntent.getActivity(ctx, a.id + 2_000_000,
+                Intent(ctx, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, a.id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            botones += Notificador.boton(ctx, "Enviar", pi)
+        }
+        if (e.pendientesSms.isNotEmpty()) botones += SmsApp.boton(ctx, a.id, e.pendientesSms.size)
+        return botones
     }
+
+    override fun alResultadoSms(ctx: Context, ref: String, ok: Boolean, motivo: String) =
+        SmsApp.alResultado(ctx, ref, ok, motivo)
 
     /**
      * Apertura automática (el núcleo ya revisa permiso y bloqueo): abre la pantalla de envío en modo
@@ -97,7 +109,7 @@ object ManejadorMensajes : Manejador {
      */
     override fun aperturaAutomatica(ctx: Context, a: Aviso): Intent? {
         val e = Envios.obtener(ctx, a.id) ?: return null
-        if (!e.puedeEnviar || !AjustesApp.autoAbrir(ctx, e)) return null
+        if (e.cerrado || e.pendientes.isEmpty() || !AjustesApp.autoAbrir(ctx, e)) return null
         return Intent(ctx, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, a.id)
             .putExtra(EnviarActivity.EXTRA_AUTO, true)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -106,7 +118,7 @@ object ManejadorMensajes : Manejador {
     override fun motivoSinApertura(ctx: Context, a: Aviso): String {
         val e = Envios.obtener(ctx, a.id) ?: return "el envío ya no existe"
         return when {
-            !e.puedeEnviar -> "no queda nadie sin enviar"
+            e.cerrado || e.pendientes.isEmpty() -> "no queda nadie sin enviar por WhatsApp"
             e.autoAbrir == false -> "apagada en este envío"
             !AjustesApp.autoAbrir(ctx, e) -> "apagada en Ajustes"
             else -> "no corresponde"

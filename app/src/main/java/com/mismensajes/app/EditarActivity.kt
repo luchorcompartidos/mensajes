@@ -26,6 +26,7 @@ import com.mis.nucleo.Programador
 import com.mis.nucleo.Recurrencia
 import com.mis.nucleo.Regla
 import com.mis.nucleo.Repeticion
+import com.mis.nucleo.Sms
 import com.mis.nucleo.Registro
 import com.mis.nucleo.Tiempo
 import java.time.LocalDate
@@ -41,6 +42,8 @@ class EditarActivity : Activity() {
     private var original: Envio? = null
     private val seleccion = mutableListOf<Int>()
     private val textos = mutableMapOf<Int, String>()          // texto por contacto
+    private val canales = mutableMapOf<Int, ModoEnvio>()       // por dónde va cada destinatario (solo en este envío)
+    private var detalleSms = false                             // se tocó el contador: muestra el detalle
     private val camposTexto = mutableMapOf<Int, EditText>()
     private var fecha: LocalDate = LocalDate.now()
     private var hora: LocalTime = LocalTime.now()
@@ -53,6 +56,7 @@ class EditarActivity : Activity() {
     private lateinit var cajaTextos: LinearLayout
     private lateinit var swAlarma: Switch
     private lateinit var txtVista: TextView
+    private lateinit var txtSms: TextView
     private var autoAbrir: Boolean? = null                     // apertura automática: null = según Ajustes
     private var ultimoCampo: EditText? = null                  // campo de texto donde se inserta la variable
 
@@ -78,6 +82,9 @@ class EditarActivity : Activity() {
         cajaTextos = findViewById(R.id.cajaTextos)
         swAlarma = findViewById(R.id.swAlarma)
         txtVista = findViewById(R.id.txtVista)
+        txtSms = findViewById(R.id.txtSms)
+        txtSms.setOnClickListener { detalleSms = !detalleSms; actualizarSms() }
+        findViewById<TextView>(R.id.txtContactos).setOnClickListener { elegirCanal() }
         seguir(edTexto)
         findViewById<Button>(R.id.btnVariable).setOnClickListener { elegirVariable() }
         findViewById<Button>(R.id.btnUsarPlantilla).setOnClickListener { usarPlantilla() }
@@ -92,6 +99,7 @@ class EditarActivity : Activity() {
             edTexto.setText(e.texto)
             seleccion += e.destinos.map { it.contactoId }
             e.destinos.forEach { if (it.texto.isNotEmpty()) textos[it.contactoId] = it.texto }
+            e.destinos.forEach { canales[it.contactoId] = it.canal }
             val z = Tiempo.zdt(e.momento)
             fecha = z.toLocalDate()
             hora = z.toLocalTime().withSecond(0).withNano(0)
@@ -233,10 +241,68 @@ class EditarActivity : Activity() {
     private fun mostrarContactos() {
         val mapa = Contactos.todos(this).associateBy { it.id }
         seleccion.retainAll { it in mapa }   // por si se borró alguno
+        // Los que se suman arrancan con el modo de su contacto.
+        seleccion.forEach { id -> canales.getOrPut(id) { mapa[id]!!.modo } }
         findViewById<TextView>(R.id.txtContactos).text =
             if (seleccion.isEmpty()) "Ninguno elegido"
-            else seleccion.joinToString("\n") { id -> mapa[id]!!.let { "• ${it.etiqueta} · ${it.numero}" } }
+            else seleccion.joinToString("\n") { id ->
+                mapa[id]!!.let { "• ${it.etiqueta} · ${it.numero} · ${canal(id).corto}" }
+            } + "\n(tocá la lista para cambiar por dónde se envía a cada uno, solo en este envío)"
         findViewById<Button>(R.id.btnContactos).text = if (seleccion.isEmpty()) "Elegir contactos" else "Cambiar contactos"
+        actualizarSms()
+    }
+
+    private fun canal(id: Int) = canales[id] ?: Contactos.obtener(this, id)?.modo ?: ModoEnvio.WHATSAPP
+
+    /** Por dónde se envía a cada destinatario, solo en este envío (no cambia el contacto ni otros envíos). */
+    private fun elegirCanal() {
+        if (seleccion.isEmpty()) return
+        val nombres = seleccion.map { id -> "${Contactos.obtener(this, id)?.etiqueta ?: "?"} · ${canal(id).corto}" }
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("¿A quién?")
+            .setItems(nombres.toTypedArray()) { _, i ->
+                val id = seleccion[i]
+                val c = Contactos.obtener(this, id)
+                val opciones = ModoEnvio.entries.map { it.texto } + "Quitar de este envío"
+                AlertDialog.Builder(this, temaDialogo())
+                    .setTitle("Enviar a ${c?.etiqueta ?: "?"} por")
+                    .setSingleChoiceItems(opciones.toTypedArray(), canal(id).ordinal) { d, j ->
+                        d.dismiss()
+                        guardarCamposTexto()
+                        if (j < ModoEnvio.entries.size) canales[id] = ModoEnvio.entries[j]
+                        else { seleccion.remove(id); canales.remove(id) }
+                        mostrarContactos(); mostrarModo()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    /**
+     * Largo del SMS (como Recordatorios): línea corta "142 caracteres · 1 SMS" debajo del texto; al tocarla
+     * o si se divide, el detalle. Mide el último campo tocado, con las variables ya reemplazadas.
+     */
+    private fun actualizarSms() {
+        if (!::txtSms.isInitialized) return
+        val conSms = seleccion.filter { canal(it).sms }
+        if (conSms.isEmpty()) { txtSms.visibility = View.GONE; return }
+        val campo = ultimoCampo ?: edTexto
+        val contactoId = if (campo === edTexto) conSms.first()
+                         else camposTexto.entries.firstOrNull { it.value === campo }?.key
+        if (contactoId != null && contactoId !in conSms) {
+            txtSms.text = "SMS: este contacto no va por SMS"
+            txtSms.visibility = View.VISIBLE
+            return
+        }
+        val c = contactoId?.let { Contactos.obtener(this, it) }
+        val texto = Sms.paraSms(Variables.aplicar(campo.text.toString(), c, ZonedDateTime.of(fecha, hora, ZoneId.systemDefault())))
+        val divide = Sms.partes(texto) > 1
+        val para = if (campo !== edTexto && c != null) " para ${c.etiqueta}" else ""
+        txtSms.text = "SMS$para: " + if (detalleSms || divide) Sms.descripcionTamanio(texto) else Sms.resumenCorto(texto)
+        txtSms.setTextColor(getColor(if (divide) RN.color.acento else RN.color.texto2))
+        txtSms.visibility = View.VISIBLE
     }
 
     /** Muestra el texto común o un campo por contacto según el modo elegido. */
@@ -244,6 +310,7 @@ class EditarActivity : Activity() {
         armarCamposTexto()
         ultimoCampo = if (rbPorContacto.isChecked) camposTexto.values.firstOrNull() else edTexto
         actualizarVista()
+        actualizarSms()
     }
 
     private fun armarCamposTexto() {
@@ -288,11 +355,11 @@ class EditarActivity : Activity() {
 
     /** Recuerda el último campo de texto tocado y mantiene al día la vista previa de las variables. */
     private fun seguir(campo: EditText) {
-        campo.setOnFocusChangeListener { _, foco -> if (foco) { ultimoCampo = campo; actualizarVista() } }
+        campo.setOnFocusChangeListener { _, foco -> if (foco) { ultimoCampo = campo; actualizarVista(); actualizarSms() } }
         campo.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) { if (campo === ultimoCampo) actualizarVista() }
+            override fun afterTextChanged(s: Editable?) { if (campo === ultimoCampo) { actualizarVista(); actualizarSms() } }
         })
     }
 
@@ -392,6 +459,7 @@ class EditarActivity : Activity() {
         findViewById<Button>(R.id.btnFecha).text = fecha.format(fFecha)
         findViewById<Button>(R.id.btnHora).text = "%02d:%02d".format(hora.hour, hora.minute)
         actualizarVista()   // {fecha}, {hora}, {dia} y {saludo} dependen de la hora programada
+        actualizarSms()
     }
 
     private fun elegirFecha() {
@@ -457,14 +525,15 @@ class EditarActivity : Activity() {
         // Se conservan las marcas de "enviado" (para reprogramar solo los pendientes), salvo que ya se
         // hubiera enviado a todos: entonces es una vuelta nueva y se empieza de cero.
         val previos = original?.destinos?.associateBy { it.contactoId } ?: emptyMap()
-        val deCero = previos.isNotEmpty() && previos.values.all { it.enviado }
+        val deCero = previos.isNotEmpty() && previos.values.all { it.listo }
         val e = Envio(
             id = id,
             titulo = edTitulo.text.toString().trim(),
             modo = if (porContacto) ModoTexto.POR_CONTACTO else ModoTexto.MISMO,
             texto = textoComun,
             destinos = seleccion.map {
-                Destino(it, if (porContacto) textos[it] ?: "" else "", enviado = !deCero && previos[it]?.enviado == true)
+                Destino(it, if (porContacto) textos[it] ?: "" else "", enviado = !deCero && previos[it]?.enviado == true,
+                    canal = canal(it), smsEnviado = !deCero && previos[it]?.smsEnviado == true)
             },
             momento = momento,
             alarma = swAlarma.isChecked,

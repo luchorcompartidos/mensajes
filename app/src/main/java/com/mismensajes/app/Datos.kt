@@ -18,8 +18,38 @@ enum class ModoTexto(val codigo: String, val texto: String) {
     }
 }
 
-/** Un destinatario de un envío. [texto] solo se usa en modo "un texto por contacto". */
-data class Destino(val contactoId: Int, val texto: String = "", val enviado: Boolean = false)
+/** Por dónde se le manda a un contacto (mismos códigos que Recordatorios, sin "Desactivado"). */
+enum class ModoEnvio(val codigo: String, val texto: String) {
+    WHATSAPP("W", "Solo WhatsApp"),
+    SMS("S", "Solo SMS"),
+    AMBOS("A", "WhatsApp y SMS");
+
+    val sms get() = this == SMS || this == AMBOS
+    val whatsapp get() = this == WHATSAPP || this == AMBOS
+
+    /** Corto, para listas: "WhatsApp", "SMS", "WhatsApp + SMS". */
+    val corto get() = when (this) { WHATSAPP -> "WhatsApp"; SMS -> "SMS"; AMBOS -> "WhatsApp + SMS" }
+
+    companion object {
+        /** Datos viejos (sin modo) = WhatsApp. "N" (Desactivado en Recordatorios) también pasa a WhatsApp. */
+        fun de(c: String?) = entries.firstOrNull { it.codigo == c } ?: WHATSAPP
+    }
+}
+
+/**
+ * Un destinatario de un envío. [texto] solo se usa en modo "un texto por contacto".
+ * [canal]: por dónde se le manda en este envío (arranca con el modo del contacto; se cambia solo para este envío).
+ * [enviado]: ya se le mandó por WhatsApp. [smsEnviado]: Android confirmó su SMS.
+ */
+data class Destino(val contactoId: Int, val texto: String = "", val enviado: Boolean = false,
+                   val canal: ModoEnvio = ModoEnvio.WHATSAPP, val smsEnviado: Boolean = false) {
+    val waPendiente get() = canal.whatsapp && !enviado
+    val smsPendiente get() = canal.sms && !smsEnviado
+    /** No le falta nada (por ninguno de sus canales). */
+    val listo get() = !waPendiente && !smsPendiente
+    /** Con las marcas en cero (para una vez nueva de un envío que se repite). */
+    fun sinEnviar() = copy(enviado = false, smsEnviado = false)
+}
 
 /** Un envío programado: uno o más contactos, un momento y el texto (común o por contacto). */
 data class Envio(
@@ -47,14 +77,23 @@ data class Envio(
 
     fun textoPara(d: Destino) = if (modo == ModoTexto.MISMO) texto else d.texto
 
-    /** Destinos a los que todavía no se les envió. */
-    val pendientes: List<Destino> get() = destinos.filter { !it.enviado }
+    /** Destinos a los que todavía no se les envió por WhatsApp (los que van solo por SMS no cuentan). */
+    val pendientes: List<Destino> get() = destinos.filter { it.waPendiente }
+
+    /** Destinos con el SMS sin enviar. */
+    val pendientesSms: List<Destino> get() = destinos.filter { it.smsPendiente }
+
+    /** Destinos a los que les falta algo (WhatsApp o SMS). */
+    val faltan: List<Destino> get() = destinos.filter { !it.listo }
+
+    /** Alguno va por SMS. */
+    val usaSms: Boolean get() = destinos.any { it.canal.sms }
 
     /** Se puede enviar: ya venció (o está pospuesto), no se cerró y queda alguien sin enviar. */
-    val paraEnviar: Boolean get() = !cerrado && !activo && pendientes.isNotEmpty()
+    val paraEnviar: Boolean get() = !cerrado && !activo && faltan.isNotEmpty()
 
     /** Se puede enviar ya, aunque siga programado ("Enviar ahora"): no se cerró y queda alguien sin enviar. */
-    val puedeEnviar: Boolean get() = !cerrado && pendientes.isNotEmpty()
+    val puedeEnviar: Boolean get() = !cerrado && faltan.isNotEmpty()
 }
 
 /** Envíos guardados en el celular (preferencias "envios"). */
@@ -117,10 +156,20 @@ object Envios {
         return nuevo
     }
 
-    /** "Enviado a 1 de 3" ("" si todavía no se envió a nadie). */
+    /** Marca el SMS de ese contacto como enviado (o no). Devuelve el envío actualizado. */
+    fun marcarSms(ctx: Context, id: Int, contactoId: Int, enviado: Boolean = true): Envio? {
+        val e = obtener(ctx, id) ?: return null
+        val nuevo = e.copy(destinos = e.destinos.map { if (it.contactoId == contactoId) it.copy(smsEnviado = enviado) else it })
+        guardar(ctx, nuevo)
+        return nuevo
+    }
+
+    /** "Enviado a 1 de 3" ("" si todavía no se envió a nadie). Con SMS cuenta a los que ya no les falta nada. */
     fun progreso(e: Envio): String {
-        val n = e.destinos.count { it.enviado }
-        return if (n == 0) "" else "Enviado a $n de ${e.destinos.size}"
+        val n = if (e.usaSms) e.destinos.count { it.listo } else e.destinos.count { it.enviado }
+        val sms = e.destinos.count { it.canal.sms }
+        val detalle = if (sms > 0) " · SMS ${e.destinos.count { it.canal.sms && it.smsEnviado }} de $sms" else ""
+        return if (n == 0 && detalle.isEmpty()) "" else "Enviado a $n de ${e.destinos.size}$detalle"
     }
 
     fun resumenTexto(e: Envio) =
@@ -134,7 +183,10 @@ object Envios {
 
     private fun aJson(e: Envio): JSONObject {
         val d = JSONArray()
-        e.destinos.forEach { d.put(JSONObject().put("c", it.contactoId).put("t", it.texto).put("e", it.enviado)) }
+        e.destinos.forEach {
+            d.put(JSONObject().put("c", it.contactoId).put("t", it.texto).put("e", it.enviado)
+                .put("k", it.canal.codigo).put("s", it.smsEnviado))
+        }
         return JSONObject().put("id", e.id).put("titulo", e.titulo).put("modo", e.modo.codigo).put("texto", e.texto)
             .put("dest", d).put("momento", e.momento).put("alarma", e.alarma).put("activo", e.activo)
             .put("cerrado", e.cerrado).put("posp", e.pospuestoHasta).put("wa", e.whatsapp)
@@ -150,7 +202,8 @@ object Envios {
             texto = o.optString("texto"),
             destinos = List(d.length()) {
                 val x = d.getJSONObject(it)
-                Destino(x.getInt("c"), x.optString("t"), x.optBoolean("e", false))
+                Destino(x.getInt("c"), x.optString("t"), x.optBoolean("e", false),
+                    ModoEnvio.de(x.optString("k", "W")), x.optBoolean("s", false))
             },
             momento = o.getLong("momento"), alarma = o.optBoolean("alarma", false),
             activo = o.optBoolean("activo", true), cerrado = o.optBoolean("cerrado", false),
@@ -165,7 +218,8 @@ object Envios {
  * Contacto de la lista propia de la app (se carga a mano, como en Recordatorios).
  * [porDefecto]: forma parte del grupo Default (se elige solo en cada envío nuevo; clave "def", como Recordatorios).
  */
-data class Contacto(val id: Int, val nombre: String, val numero: String, val porDefecto: Boolean = false) {
+data class Contacto(val id: Int, val nombre: String, val numero: String, val porDefecto: Boolean = false,
+                    val modo: ModoEnvio = ModoEnvio.WHATSAPP) {
     val etiqueta get() = nombre.ifBlank { numero }
 
     /**
@@ -186,7 +240,8 @@ object Contactos {
         val arr = JSONArray(prefs(ctx).getString("l", "[]") ?: "[]")
         return List(arr.length()) {
             val o = arr.getJSONObject(it)
-            Contacto(o.optInt("id", 0), o.optString("nombre"), o.optString("numero"), o.optBoolean("def", false))
+            Contacto(o.optInt("id", 0), o.optString("nombre"), o.optString("numero"), o.optBoolean("def", false),
+                ModoEnvio.de(o.optString("modo", "W")))
         }
     }
 
@@ -222,7 +277,8 @@ object Contactos {
     fun guardarTodos(ctx: Context, lista: List<Contacto>) {
         val arr = JSONArray()
         lista.forEach {
-            arr.put(JSONObject().put("id", it.id).put("nombre", it.nombre).put("numero", it.numero).put("def", it.porDefecto))
+            arr.put(JSONObject().put("id", it.id).put("nombre", it.nombre).put("numero", it.numero).put("def", it.porDefecto)
+                .put("modo", it.modo.codigo))
         }
         prefs(ctx).edit().putString("l", arr.toString()).commit()
     }

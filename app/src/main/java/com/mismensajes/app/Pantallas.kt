@@ -274,16 +274,30 @@ class AlarmaActivity : Activity() {
             text = nota
             visibility = if (nota.isBlank()) View.GONE else View.VISIBLE
         }
-        // "Enviar" mientras quede alguien sin enviar: calla la alarma y abre la pantalla de envío.
-        val pendientes = Envios.obtener(this, envioId)?.pendientes?.size ?: 0
+        // "Enviar" mientras quede alguien sin enviar: calla la alarma y abre la pantalla de envío
+        // (que también tiene "Enviar SMS"). Si solo quedan SMS: "Enviar SMS" los manda directo.
+        val envio = Envios.obtener(this, envioId)
+        val pendientes = envio?.pendientes?.size ?: 0
+        val sms = envio?.pendientesSms?.size ?: 0
         findViewById<Button>(R.id.alEnviar).apply {
-            visibility = if (pendientes > 0) View.VISIBLE else View.GONE
-            text = if (pendientes > 1) "Enviar ($pendientes contactos)" else "Enviar"
+            visibility = if (pendientes > 0 || sms > 0) View.VISIBLE else View.GONE
+            text = when {
+                pendientes == 0 -> if (sms > 1) "Enviar SMS ($sms contactos)" else "Enviar SMS"
+                pendientes > 1 -> "Enviar ($pendientes contactos)"
+                else -> "Enviar"
+            }
             setOnClickListener {
                 Notificador.silenciar(this@AlarmaActivity, envioId)
+                if (pendientes == 0 && com.mis.nucleo.Sms.permitido(this@AlarmaActivity)) {
+                    avisar(SmsApp.enviarTodos(this@AlarmaActivity, envioId))
+                    Notificador.actualizar(this@AlarmaActivity, envioId)
+                    finish()
+                    return@setOnClickListener
+                }
                 conDesbloqueo {
                     startActivity(Intent(this@AlarmaActivity, EnviarActivity::class.java)
-                        .putExtra(Programador.EXTRA_ID, envioId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        .putExtra(Programador.EXTRA_ID, envioId).putExtra(EnviarActivity.EXTRA_SMS, pendientes == 0)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     finish()
                 }
             }

@@ -223,7 +223,7 @@ class MainActivity : Activity() {
             // Vencido con pendientes: "Enviar" (principal). Todavía programado: "Enviar ahora" (secundario).
             if (e.puedeEnviar) addView(Button(this@MainActivity, null, 0,
                 if (e.paraEnviar) RN.style.Boton_Principal else RN.style.Boton).apply {
-                val n = if (e.pendientes.size > 1) " (${e.pendientes.size} pendientes)" else ""
+                val n = if (e.faltan.size > 1) " (${e.faltan.size} pendientes)" else ""
                 text = (if (e.paraEnviar) "Enviar" else "Enviar ahora") + n
                 setOnClickListener { if (e.repite) adelantarVez(e) else abrirEnvio(e.id) }
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,

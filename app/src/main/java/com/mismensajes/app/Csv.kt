@@ -85,16 +85,28 @@ object Csv {
         Normalizer.normalize(s.replace("\uFEFF", "").trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 }
 
-/** Importación y exportación de contactos (columnas `numero`, `nombre`, `lista`, `default`). */
+/** Importación y exportación de contactos (columnas `numero`, `nombre`, `lista`, `default`, `modo`). */
 object CsvContactos {
     private val COL_NUMERO = setOf("numero", "telefono", "celular", "whatsapp")
     private val COL_NOMBRE = setOf("nombre")
     private val COL_LISTA = setOf("lista", "listas")
     private val COL_DEFAULT = setOf("default", "grupo default")
+    private val COL_MODO = setOf("modo", "canal", "enviar por")
+
+    /** Valor de la columna `modo`: whatsapp / sms / ambos (vacío = no se indica). */
+    fun leerModo(v: String): ModoEnvio? = when (Csv.normalizar(v).replace(" ", "")) {
+        "" -> null
+        "whatsapp", "wa", "w", "solowhatsapp" -> ModoEnvio.WHATSAPP
+        "sms", "s", "solosms" -> ModoEnvio.SMS
+        "ambos", "a", "whatsappysms", "whatsapp+sms", "smsywhatsapp" -> ModoEnvio.AMBOS
+        else -> null
+    }
+
+    fun escribirModo(m: ModoEnvio) = when (m) { ModoEnvio.WHATSAPP -> "whatsapp"; ModoEnvio.SMS -> "sms"; ModoEnvio.AMBOS -> "ambos" }
     val SI = setOf("si", "s", "x", "1", "true", "verdadero", "yes")
 
     data class Fila(val fila: Int, val numero: String, val nombre: String, val listas: List<String>,
-                    val porDefecto: Boolean, val existente: Contacto?)
+                    val porDefecto: Boolean, val existente: Contacto?, val modo: ModoEnvio? = null)
 
     data class Analisis(val filas: List<Fila>, val errores: List<String>, val avisos: List<String>,
                         val listasNuevas: List<String>, val errorGeneral: String? = null) {
@@ -108,7 +120,7 @@ object CsvContactos {
         if (filas.isEmpty()) return Analisis(emptyList(), emptyList(), emptyList(), emptyList(), "El archivo está vacío.")
         val enc = filas[0].map { Csv.normalizar(it) }
         fun col(nombres: Set<String>) = enc.indexOfFirst { it in nombres }
-        val iNum = col(COL_NUMERO); val iNom = col(COL_NOMBRE); val iLis = col(COL_LISTA); val iDef = col(COL_DEFAULT)
+        val iNum = col(COL_NUMERO); val iNom = col(COL_NOMBRE); val iLis = col(COL_LISTA); val iDef = col(COL_DEFAULT); val iModo = col(COL_MODO)
         if (iNum < 0) return Analisis(emptyList(), emptyList(), emptyList(), emptyList(),
             "Falta la columna «numero» en la primera fila (encabezados). Columnas encontradas: " +
                 filas[0].joinToString(", ") { "«${it.trim()}»" } + ".")
@@ -136,7 +148,9 @@ object CsvContactos {
             if (numero.length <= 10) avisos += "Fila $n: $crudo parece no tener código de país (en Argentina, 549…)"
             val listas = v(iLis).split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { Csv.normalizar(it) }
             listas.forEach { l -> Csv.normalizar(l).let { k -> if (k !in listasActuales) listasNuevas.putIfAbsent(k, l) } }
-            ok += Fila(n, numero, v(iNom), listas, Csv.normalizar(v(iDef)) in SI, actuales[numero])
+            val modo = leerModo(v(iModo))
+            if (modo == null && v(iModo).isNotEmpty()) avisos += "Fila $n: modo «${v(iModo)}» no reconocido (whatsapp, sms o ambos): queda como está"
+            ok += Fila(n, numero, v(iNom), listas, Csv.normalizar(v(iDef)) in SI, actuales[numero], modo)
         }
         return Analisis(ok, errores, avisos, listasNuevas.values.toList())
     }
@@ -151,11 +165,12 @@ object CsvContactos {
             val i = contactos.indexOfFirst { it.numeroWhatsapp() == f.numero }
             if (i >= 0) {
                 val c = contactos[i]
-                val nuevo = c.copy(nombre = f.nombre.ifBlank { c.nombre }, porDefecto = c.porDefecto || f.porDefecto)
+                val nuevo = c.copy(nombre = f.nombre.ifBlank { c.nombre }, porDefecto = c.porDefecto || f.porDefecto,
+                    modo = f.modo ?: c.modo)
                 if (nuevo != c) { contactos[i] = nuevo; actualizados++ }
                 idPorFila[f.fila] = c.id
             } else {
-                contactos += Contacto(proximo, f.nombre, f.numero, f.porDefecto)
+                contactos += Contacto(proximo, f.nombre, f.numero, f.porDefecto, f.modo ?: ModoEnvio.WHATSAPP)
                 idPorFila[f.fila] = proximo++
             }
         }
@@ -192,11 +207,11 @@ object CsvContactos {
     /** CSV con todos los contactos: mismas columnas que la importación. */
     fun exportar(ctx: Context): String {
         val listas = Listas.ordenadas(ctx)
-        val filas = mutableListOf(listOf("numero", "nombre", "lista", "default"))
+        val filas = mutableListOf(listOf("numero", "nombre", "lista", "default", "modo"))
         Contactos.ordenados(ctx).forEach { c ->
             filas += listOf(c.numero, c.nombre,
                 listas.filter { c.id in it.contactos }.joinToString(", ") { it.etiqueta },
-                if (c.porDefecto) "sí" else "no")
+                if (c.porDefecto) "sí" else "no", escribirModo(c.modo))
         }
         return "﻿" + Csv.escribir(filas)   // BOM: Excel lo abre con tildes bien
     }

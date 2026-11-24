@@ -1,5 +1,6 @@
 package com.mismensajes.app
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
@@ -8,6 +9,8 @@ import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.TextUtils
 import android.view.View
 import android.widget.Button
@@ -18,6 +21,7 @@ import com.mis.nucleo.Programador
 import com.mis.nucleo.Recurrencia
 import com.mis.nucleo.Regla
 import com.mis.nucleo.Registro
+import com.mis.nucleo.Sms
 import com.mis.nucleo.Tiempo
 import com.mis.nucleo.R as RN
 
@@ -106,7 +110,7 @@ fun separarVez(ctx: Context, e: Envio): Envio {
     val veces = e.ocurrencias + 1
     val siguiente = if (e.regla.limite in 1..veces) null
                     else Recurrencia.siguiente(e.regla, e.momento, maxOf(ahora, e.momento))
-    val sinEnviar = e.destinos.map { it.copy(enviado = false) }
+    val sinEnviar = e.destinos.map { it.sinEnviar() }
     if (siguiente == null) {
         val ultima = e.copy(activo = false, ocurrencias = veces, destinos = sinEnviar)
         Envios.guardar(ctx, ultima)
@@ -132,7 +136,18 @@ fun separarVez(ctx: Context, e: Envio): Envio {
  * primer pendiente y, cada vez que se confirma "Sí, enviado", sigue con el próximo.
  */
 class EnviarActivity : Activity() {
-    companion object { const val EXTRA_AUTO = "auto" }
+    companion object {
+        const val EXTRA_AUTO = "auto"
+        /** Al abrirse, manda los SMS pendientes (pidiendo el permiso si falta). */
+        const val EXTRA_SMS = "sms"
+        private const val PEDIDO_SMS = 5
+    }
+
+    private var pedirSms = false    // falta mandar los SMS pedidos al abrir la pantalla ([EXTRA_SMS])
+    private var smsLuegoDePermiso: Int? = null   // qué mandar al conceder el permiso: -1 = todos, o un contacto
+    private val manejador = Handler(Looper.getMainLooper())
+    private var refrescos = 0       // vueltas de refresco mientras Android confirma los SMS
+    private var botonSms: Button? = null
 
     private var envioId = -1
     private var auto = false        // falta abrir WhatsApp solo con el primer pendiente (apertura automática)
@@ -149,6 +164,7 @@ class EnviarActivity : Activity() {
         terminado = estado?.getBoolean("terminado", false) ?: false
         auto = estado?.getBoolean("auto", false) ?: intent.getBooleanExtra(EXTRA_AUTO, false)
         cadena = estado?.getBoolean("cadena", false) ?: auto
+        pedirSms = estado == null && intent.getBooleanExtra(EXTRA_SMS, false)
         if (estado == null && auto) Registro.anotar(this, "#$envioId apertura automática: se abrió la pantalla de envío")
         // Si la alarma está sonando, se calla (la notificación queda en la bandeja).
         if (Notificador.sonando(this, envioId)) Notificador.silenciar(this, envioId)
@@ -160,6 +176,7 @@ class EnviarActivity : Activity() {
         setIntent(nuevo)
         val id = nuevo.getIntExtra(Programador.EXTRA_ID, -1)
         if (id != envioId) { envioId = id; esperando = -1; terminado = false; cadena = false }
+        if (nuevo.getBooleanExtra(EXTRA_SMS, false)) pedirSms = true
         if (nuevo.getBooleanExtra(EXTRA_AUTO, false) && esperando == -1 && !preguntando) {
             auto = true
             cadena = true
@@ -185,6 +202,7 @@ class EnviarActivity : Activity() {
             return
         }
         mostrar(e)
+        if (pedirSms) { pedirSms = false; enviarSms(-1) }
         if (esperando != -1 && !preguntando) confirmar(esperando)
         else if (auto && !preguntando) {
             auto = false
@@ -204,8 +222,7 @@ class EnviarActivity : Activity() {
                 "programación: si queda alguien sin enviar, el aviso suena igual a esa hora."
             else -> "Venció el ${Tiempo.completo(e.momento)}"
         }
-        val enviados = e.destinos.count { it.enviado }
-        findViewById<TextView>(R.id.enProgreso).text = "Enviado a $enviados de ${e.destinos.size}"
+        findViewById<TextView>(R.id.enProgreso).text = Envios.progreso(e).ifBlank { "Enviado a 0 de ${e.destinos.size}" }
 
         val lista = findViewById<LinearLayout>(R.id.enLista)
         lista.removeAllViews()
@@ -222,6 +239,7 @@ class EnviarActivity : Activity() {
                 setOnClickListener { enviarA(siguiente.contactoId) }
             }
         }
+        mostrarBotonSms(e)
         findViewById<Button>(R.id.enCerrar).text = if (e.cerrado) "Listo" else "Cerrar envío (Hecho)"
         if (WhatsApp.instalado(this) == null && !e.cerrado) {
             findViewById<TextView>(R.id.enAyuda).text = "No se encontró WhatsApp en el celular: se intentará abrir por el navegador."
@@ -234,6 +252,64 @@ class EnviarActivity : Activity() {
             text = "Se abre con: $actual · tocá para cambiarlo en este envío"
             setOnClickListener { elegirWhatsappDelEnvio() }
         }
+    }
+
+    /** "Enviar SMS (N)": manda todos los SMS pendientes del envío (va debajo de "Enviar a…"). */
+    private fun mostrarBotonSms(e: Envio) {
+        val siguiente = findViewById<Button>(R.id.enSiguiente)
+        val b = botonSms ?: Button(this, null, 0, RN.style.Boton).also { nuevo ->
+            botonSms = nuevo
+            val padre = siguiente.parent as LinearLayout
+            padre.addView(nuevo, padre.indexOfChild(siguiente) + 1, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = (8 * resources.displayMetrics.density).toInt() })
+            nuevo.setOnClickListener { enviarSms(-1) }
+        }
+        val n = if (e.cerrado) 0 else e.pendientesSms.size
+        b.visibility = if (n == 0) View.GONE else View.VISIBLE
+        b.text = if (n > 1) "Enviar SMS ($n contactos)" else "Enviar SMS"
+    }
+
+    /** Manda los SMS pendientes ([contactoId] = -1) o el de un contacto; pide el permiso si falta. */
+    private fun enviarSms(contactoId: Int) {
+        if (!Sms.permitido(this)) {
+            smsLuegoDePermiso = contactoId
+            requestPermissions(arrayOf(Manifest.permission.SEND_SMS), PEDIDO_SMS)
+            return
+        }
+        if (Notificador.sonando(this, envioId)) Notificador.silenciar(this, envioId)
+        avisar(if (contactoId == -1) SmsApp.enviarTodos(this, envioId) else SmsApp.enviarUno(this, envioId, contactoId))
+        Notificador.actualizar(this, envioId)
+        // Android confirma cada SMS al rato: se vuelve a dibujar unas veces para mostrar las marcas.
+        refrescos = 10
+        manejador.removeCallbacksAndMessages(null)
+        manejador.postDelayed(::refrescar, 1500)
+    }
+
+    private fun refrescar() {
+        if (isFinishing) return
+        Envios.obtener(this, envioId)?.let { if (it.cerrado) terminado = true; mostrar(it) }
+        if (--refrescos > 0) manejador.postDelayed(::refrescar, 1500)
+    }
+
+    override fun onDestroy() {
+        manejador.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
+    override fun onRequestPermissionsResult(pedido: Int, permisos: Array<out String>, resultados: IntArray) {
+        super.onRequestPermissionsResult(pedido, permisos, resultados)
+        if (pedido != PEDIDO_SMS) return
+        val cual = smsLuegoDePermiso ?: return
+        smsLuegoDePermiso = null
+        if (Sms.permitido(this)) enviarSms(cual)
+        else AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Falta el permiso de SMS")
+            .setMessage("Sin el permiso de SMS no se pueden mandar. Si Android no deja darlo (la app se instaló a mano): " +
+                "Ajustes del celular > Apps > Programador de Mensajes > ⋮ > «Permitir ajustes restringidos», " +
+                "y después volvé a tocar «Enviar SMS».")
+            .setPositiveButton("Entendido", null)
+            .show()
     }
 
     private fun elegirWhatsappDelEnvio() {
@@ -261,15 +337,18 @@ class EnviarActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(RN.drawable.campo)
             setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
-            if (d.enviado) alpha = 0.65f
+            if (d.listo) alpha = 0.65f
             addView(TextView(this@EnviarActivity).apply {
-                text = (if (d.enviado) "✓ " else "○ ") + (c?.etiqueta ?: "(contacto borrado)")
+                text = (if (d.listo) "✓ " else "○ ") + (c?.etiqueta ?: "(contacto borrado)")
                 textSize = 16f
                 setTypeface(typeface, Typeface.BOLD)
-                setTextColor(getColor(if (d.enviado) RN.color.acento else RN.color.texto))
+                setTextColor(getColor(if (d.listo) RN.color.acento else RN.color.texto))
             })
             addView(TextView(this@EnviarActivity).apply {
-                text = (c?.numero ?: "") + if (d.enviado) " · enviado" else " · pendiente"
+                val estados = mutableListOf<String>()
+                if (d.canal.whatsapp) estados += if (d.enviado) "WhatsApp enviado" else "WhatsApp pendiente"
+                if (d.canal.sms) estados += if (d.smsEnviado) "SMS enviado" else "SMS pendiente"
+                text = (c?.numero ?: "") + " · " + estados.joinToString(" · ")
                 textSize = 14f
                 setTextColor(getColor(RN.color.texto2))
             })
@@ -282,7 +361,17 @@ class EnviarActivity : Activity() {
                 setPadding(0, (4 * dp).toInt(), 0, 0)
             })
             setOnClickListener {
-                if (!d.enviado) enviarA(d.contactoId)
+                if (!d.canal.whatsapp) {
+                    // Solo SMS: mandarlo (o volver a mandarlo) a este contacto.
+                    AlertDialog.Builder(this@EnviarActivity, temaDialogo())
+                        .setTitle(if (d.smsEnviado) "SMS ya enviado" else "Enviar SMS")
+                        .setMessage((if (d.smsEnviado) "¿Mandarle el SMS otra vez a " else "¿Mandarle el SMS a ") +
+                            "${nombre(d.contactoId)}? (puede tener costo según tu plan)")
+                        .setPositiveButton("Enviar SMS") { _, _ -> enviarSms(d.contactoId) }
+                        .setNegativeButton("Cancelar", null)
+                        .show()
+                }
+                else if (!d.enviado) enviarA(d.contactoId)
                 else AlertDialog.Builder(this@EnviarActivity, temaDialogo())
                     .setTitle("Ya enviado")
                     .setMessage("¿Enviarle otra vez a ${nombre(d.contactoId)}?")
@@ -291,7 +380,9 @@ class EnviarActivity : Activity() {
                     .show()
             }
             setOnLongClickListener {
-                Envios.marcarEnviado(this@EnviarActivity, envioId, d.contactoId, !d.enviado)?.let { revisar(it) }
+                // Marca a mano: WhatsApp (o el SMS, si va solo por SMS).
+                if (d.canal.whatsapp) Envios.marcarEnviado(this@EnviarActivity, envioId, d.contactoId, !d.enviado)?.let { revisar(it) }
+                else Envios.marcarSms(this@EnviarActivity, envioId, d.contactoId, !d.smsEnviado)?.let { revisar(it) }
                 true
             }
         }
@@ -340,7 +431,7 @@ class EnviarActivity : Activity() {
 
     /** Vuelve a dibujar y, si ya se envió a todos, cierra el envío; si no, actualiza el progreso de la notificación. */
     private fun revisar(e: Envio) {
-        if (e.pendientes.isEmpty() && !e.cerrado) {
+        if (e.faltan.isEmpty() && !e.cerrado) {
             cerrarEnvio(this, envioId, "enviado a todos")
             terminado = true
             avisar("Enviado a todos. Envío cerrado.")
@@ -353,7 +444,7 @@ class EnviarActivity : Activity() {
     private fun cerrar() {
         val e = Envios.obtener(this, envioId)
         if (e == null || e.cerrado) { finish(); return }
-        val faltan = e.pendientes.size
+        val faltan = e.faltan.size
         AlertDialog.Builder(this, temaDialogo())
             .setTitle("Cerrar envío")
             .setMessage((if (faltan == 0) "¿Cerrar el envío?"
