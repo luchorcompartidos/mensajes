@@ -24,12 +24,13 @@
 - "Enviar ahora" en un envío que se repite pide confirmación y adelanta la próxima vez (la separa y la abre para enviar).
 - La lista muestra 🔁 y la regla (con "N/L veces" si tiene límite).
 - **A probar en el celular:** v0.0.11 + lo pendiente de la v0.0.5 a v0.0.10.
-- En curso: —
+- En curso: definiciones de Google Sheets y SMS → propuesta en `DEFINICIONES.md`, **a confirmar**.
 
 ## 3. Próximos pasos
 1. **Probar la v0.0.11** (incluye lo de la v0.0.5 a v0.0.10) en el celular y corregir lo que aparezca.
 2. **Etapa aparte — Migrar Recordatorios** al núcleo `nucleo-android` (submódulo); de paso alinear `WhatsApp.abrir` con `EnviarWhatsappActivity`.
-3. A definir: importar desde Google Sheets, SMS automático, grupo Default como lista (ver sección 5).
+3. **Confirmar las definiciones** de `DEFINICIONES.md` (Google Sheets y SMS; ver su sección D) y el orden de etapas propuesto (0.12 importar contactos, 0.13 SMS, 0.14 importar envíos).
+4. A definir: grupo Default como lista (ver sección 5).
 
 ## 4. Decisiones tomadas
 - 2026-11-23 App separada de Recordatorios (no pantalla nueva dentro de ella): escalabilidad y funciones futuras propias de mensajería.
@@ -65,14 +66,14 @@
 
 ## 5. Pendientes / dudas abiertas
 - [ ] Probar en el celular la v0.0.11 (incluye lo de la v0.0.5 a v0.0.10; ver sección 2).
-- [ ] ¿Más variables a futuro (ej. de una planilla de Google Sheets)?
+- [ ] ¿Más variables a futuro? → propuesta en `DEFINICIONES.md` (A.3, columnas extra de la planilla).
 - [ ] ¿Pasar `Contactos`/`Agenda` y las pantallas al núcleo cuando se migre Recordatorios?
 - [ ] Cargar el link fijo en la planilla de Mi Panel.
 - [ ] ¿Pasar el grupo Default a ser una lista más?
-- [ ] Futuro: SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`), importar desde Google Sheets.
+- [ ] Confirmar `DEFINICIONES.md`: importar desde Google Sheets (CSV por archivo y/o link publicado) y SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`, envío en el núcleo).
 
 ## 6. Datos técnicos clave
-- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
+- Definiciones de funciones grandes: `DEFINICIONES.md`. Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
 - Requisitos heredados: minSdk 34 (Android 14), compileSdk/targetSdk 35. Permisos de alarmas (`POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT`) y receivers declarados en el manifiesto de `:nucleo`; `INTERNET` (Releases de GitHub) también en `:nucleo`; `READ_CONTACTS` en el manifiesto de `:app` (solo para validar); falta `SEND_SMS` (solo con SMS automático).
 - Configuración / servicios: Secrets `KEYSTORE_B64` y `KEYSTORE_PASS` cargados (los mismos de Recordatorios; alias `recordatorios`, o el Secret `KEYSTORE_ALIAS` si se cambia la clave). Respaldo: `secretos-github.txt` del chat "Recordatorios PWA vs app nativa" (14-11-2026).
 - Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`, checkout con submódulos) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
@@ -93,6 +94,7 @@
 - 2026-11-23: Etapa 0.9: núcleo movido a `luchorcompartidos/nucleo-android` (submódulo `nucleo/`, `submodules: true` en Actions) → sin Release (compilación de prueba, OK).
 - 2026-11-24: Etapa 0.10: listas de contactos (ABM en Contactos, "Usar lista" / "Guardar como lista" en el envío) → Release **v0.0.10** (patch).
 - 2026-11-24: Etapa 0.11: repetición de envíos (regla en el núcleo 0.6.0, cada vez separada en un envío aparte, "Enviar ahora" adelanta la vez) → Release **v0.0.11** (patch).
+- 2026-11-24: Definiciones propuestas de Google Sheets y SMS automático en `DEFINICIONES.md` (a confirmar) → sin Release (solo documentación).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*
