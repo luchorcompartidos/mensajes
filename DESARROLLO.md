@@ -14,21 +14,21 @@
 | URL publicada | APK: https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk |
 | Tipo | Android APK (Kotlin nativo, compilado en GitHub Actions) |
 | Estado | En desarrollo |
-| Última versión (Release) | **v0.0.7** (23-11-2026) |
+| Última versión (Release) | **v0.0.8** (23-11-2026) |
 | Se conecta con | WhatsApp (por intent, sin API) · a futuro Google Sheets |
 
 ## 2. Etapa actual
-**Etapa 0.7 — cerrada** → Release **v0.0.7**: versión y Changelog desde GitHub (traído de `Version.kt` de Recordatorios). Próxima etapa: a definir (ver sección 3).
-- `VersionGitHub` pasó al **núcleo** (`nucleo/.../Version.kt`, núcleo **0.5.0**), genérico: cada app pone `VersionGitHub.repo` (y `apkFijo`) en `Application.onCreate()`. Mismas prefs que Recordatorios ("version_github"); consulta las Releases como mucho cada 30 min (o al tocar), sin conexión usa la última guardada. Permiso `INTERNET` en el manifiesto del núcleo.
-- **Pantalla principal:** franja "Hay una versión nueva (vX.Y.Z)" → diálogo con "Descargar"; tocar la versión del encabezado abre el diálogo de versión (fecha de la Release, aviso y botón "Changelog").
-- **Ajustes → Acerca de:** versión instalada + núcleo, última publicada, "Versión y actualizaciones", "Ver cambios (Changelog)" y "Descargar instalador de la última versión" (prefiere el `programador-mensajes-X.Y.Z.apk`).
-- Sin Changelog interno (`Cambios`): el Changelog sale de las notas de cada Release (mensaje del commit).
-- **A probar en el celular:** lo pendiente de la 0.4 y la 0.5 (ver Historial) + v0.0.5 + v0.0.6 + v0.0.7 (el aviso de versión nueva se va a ver recién cuando salga la v0.0.8).
+**Etapa 0.8 parte A — cerrada** → Release **v0.0.8**: plantillas de texto reutilizables (lista + alta/edición/borrado). Sigue la **parte B**.
+- `Plantillas.kt`: `Plantilla` (id, nombre opcional, texto) y `Plantillas` (prefs "plantillas", ids nunca reutilizados con "ultimo_id", nombre repetido no permitido); `PlantillasActivity` (tocar = editar, mantener presionado = borrar); diálogo `editarPlantilla` con "Insertar variable" y vista previa con un contacto de ejemplo ("Ana María", hora actual); con errores el diálogo no se cierra.
+- `insertarVariable(campo)` pasó a ser común (lo usan la edición de envíos y las plantillas).
+- Pantalla principal: "Nuevo envío" a todo el ancho y debajo "Contactos" + "Plantillas".
+- Borrar una plantilla no cambia los envíos que ya usaron ese texto (se copia, no se enlaza).
+- **A probar en el celular:** v0.0.8 + lo pendiente de la v0.0.5, v0.0.6 y v0.0.7 (el aviso de versión nueva de la v0.0.7 debería aparecer ahora, al salir la v0.0.8).
 - En curso: —
 
 ## 3. Próximos pasos
-1. **Probar la v0.0.7** (incluye lo de la v0.0.5 y la v0.0.6) en el celular y corregir lo que aparezca.
-2. **Próxima etapa (propuesta): plantillas de texto reutilizables** (ya con variables); conviene en dos partes (A: lista + ABM de plantillas; B: "Usar plantilla" en la edición + pulido).
+1. **Probar la v0.0.8** (incluye lo de la v0.0.5, v0.0.6 y v0.0.7) en el celular y corregir lo que aparezca.
+2. **Etapa 0.8 parte B:** botón "Usar plantilla" en la edición del envío (en "mismo texto" y en cada texto por contacto: reemplazar o agregar al texto actual) + "Guardar como plantilla" desde un envío + pulido.
 3. **Etapa posterior — Núcleo a su repo:** mover `nucleo/` a `luchorcompartidos/nucleo-android` (submódulo, `submodules: true` en Actions) y, en etapa aparte, migrar Recordatorios a ese núcleo.
 
 ## 4. Decisiones tomadas
@@ -57,17 +57,18 @@
 - 2026-11-23 Posponer rápido y alarma por defecto se guardan en el núcleo (claves de Recordatorios), para compartirlos al migrar.
 - 2026-11-23 `Version.kt` de Recordatorios va al núcleo (`VersionGitHub`, repo configurable por app), no a `:app`: así Recordatorios lo reutiliza al migrar. Sin Changelog interno: se usa el de las Releases.
 - 2026-11-23 Link de Mi Panel: cada Release sube además una copia de nombre fijo → `https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk`.
+- 2026-11-23 Plantillas: el texto se **copia** al envío (no queda enlazado); editar o borrar una plantilla no cambia envíos ya creados. Parte A (ABM) y parte B (usar en envíos) en Releases separadas.
 
 ## 5. Pendientes / dudas abiertas
-- [ ] Probar en el celular la v0.0.7 (incluye lo de la v0.0.5 y la v0.0.6; ver sección 2).
+- [ ] Probar en el celular la v0.0.8 (incluye lo de la v0.0.5, v0.0.6 y v0.0.7; ver sección 2).
 - [ ] ¿Más variables a futuro (ej. de una planilla de Google Sheets)?
 - [ ] ¿Pasar `Contactos`/`Agenda` y las pantallas al núcleo cuando se migre Recordatorios?
 - [ ] Cargar el link fijo en la planilla de Mi Panel.
 - [ ] ¿Repetición en v1?
-- [ ] Futuro: SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`), plantillas, listas, importar desde Google Sheets.
+- [ ] Futuro: SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`), listas, importar desde Google Sheets.
 
 ## 6. Datos técnicos clave
-- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio`, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto); núcleo en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
+- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio`, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `insertarVariable`); núcleo en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
 - Requisitos heredados: minSdk 34 (Android 14), compileSdk/targetSdk 35. Permisos de alarmas (`POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT`) y receivers declarados en el manifiesto de `:nucleo`; `INTERNET` (Releases de GitHub) también en `:nucleo`; `READ_CONTACTS` en el manifiesto de `:app` (solo para validar); falta `SEND_SMS` (solo con SMS automático).
 - Configuración / servicios: Secrets `KEYSTORE_B64` y `KEYSTORE_PASS` cargados (los mismos de Recordatorios; alias `recordatorios`, o el Secret `KEYSTORE_ALIAS` si se cambia la clave). Respaldo: `secretos-github.txt` del chat "Recordatorios PWA vs app nativa" (14-11-2026).
 - Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
@@ -83,6 +84,7 @@
 - 2026-11-23: Etapa 0.6 parte A: Enviar ahora, grupo Default, Ajustes con WhatsApp común/Business (+ cambio por envío), progreso en la notificación, ícono definitivo, revisión de código; núcleo 0.4.0 → Release **v0.0.5** (patch).
 - 2026-11-23: Etapa 0.6 parte B: Ajustes con posponer rápido y alarma por defecto; variables en el texto con botón "Insertar variable" y vista previa → Release **v0.0.6** (patch). Etapa 0.6 cerrada.
 - 2026-11-23: Etapa 0.7: `VersionGitHub` en el núcleo (0.5.0), aviso de versión nueva en la pantalla principal, versión tocable y "Acerca de" en Ajustes con Changelog e instalador → Release **v0.0.7** (patch).
+- 2026-11-23: Etapa 0.8 parte A: plantillas de texto reutilizables (lista + alta/edición/borrado, con variables y vista previa) y botón "Plantillas" en la principal → Release **v0.0.8** (patch).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*

@@ -37,6 +37,9 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnContactos).setOnClickListener {
             startActivity(Intent(this, ContactosActivity::class.java))
         }
+        findViewById<Button>(R.id.btnPlantillas).setOnClickListener {
+            startActivity(Intent(this, PlantillasActivity::class.java))
+        }
         findViewById<TextView>(R.id.btnAjustes).setOnClickListener {
             startActivity(Intent(this, AjustesActivity::class.java))
         }

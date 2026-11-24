@@ -205,21 +205,7 @@ class EditarActivity : Activity() {
     /** Lista de variables; la elegida se inserta donde está el cursor del último campo de texto tocado. */
     private fun elegirVariable() {
         val campo = ultimoCampo ?: run { avisar("Elegí primero los contactos"); return }
-        val items = Variables.LISTA.map { "{${it.clave}}  ·  ${it.descripcion}" }.toTypedArray()
-        AlertDialog.Builder(this, temaDialogo())
-            .setTitle("Insertar variable")
-            .setItems(items) { _, i ->
-                val v = "{${Variables.LISTA[i].clave}}"
-                val largo = campo.text.length
-                val ini = campo.selectionStart.takeIf { it in 0..largo } ?: largo
-                val fin = campo.selectionEnd.takeIf { it in 0..largo } ?: largo
-                campo.text.replace(minOf(ini, fin), maxOf(ini, fin), v)
-                campo.requestFocus()
-                campo.setSelection(minOf(ini, fin) + v.length)
-                actualizarVista()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
+        insertarVariable(campo) { actualizarVista() }
     }
 
     private fun guardarCamposTexto() {

@@ -40,6 +40,12 @@
             android:exported="false" />
 
         <activity
+            android:name=".PlantillasActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".AjustesActivity"
             android:exported="false" />
 
