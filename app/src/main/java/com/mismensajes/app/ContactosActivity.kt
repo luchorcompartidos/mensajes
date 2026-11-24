@@ -3,11 +3,13 @@ package com.mismensajes.app
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputType
 import android.view.ContextThemeWrapper
+import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
@@ -16,6 +18,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.mis.nucleo.Registro
+import java.time.LocalDate
 import com.mis.nucleo.R as RN
 
 /**
@@ -52,7 +56,9 @@ class ContactosActivity : Activity() {
         val ayuda = TextView(this).apply {
             text = "Los contactos se cargan escribiendo el número a mano. Con «Validar en WA» se busca solo ese " +
                 "número en la agenda del celular para traer el nombre y ver si tiene WhatsApp.\n" +
-                "Casilla = forma parte del grupo Default: esos contactos se eligen solos en cada envío nuevo."
+                "Casilla = forma parte del grupo Default: esos contactos se eligen solos en cada envío nuevo.\n" +
+                "Menú ⋮ → «Importar…» / «Exportar…»: contactos desde o hacia un archivo CSV (Google Sheets: " +
+                "Archivo > Descargar > CSV). Columnas: numero, nombre, lista, default."
             textSize = 13f
             setTextColor(getColor(RN.color.texto2))
             setPadding(0, (12 * dp).toInt(), 0, (8 * dp).toInt())
@@ -76,9 +82,61 @@ class ContactosActivity : Activity() {
         armar()
     }
 
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menu.add(0, MENU_IMPORTAR, 0, "Importar…")
+        menu.add(0, MENU_EXPORTAR, 1, "Exportar…")
+        return true
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == android.R.id.home) { finish(); return true }
+        when (item.itemId) {
+            android.R.id.home -> { finish(); return true }
+            MENU_IMPORTAR -> {
+                // Selector de archivos de Android (sin permisos): CSV de Sheets, Excel o Drive.
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/comma-separated-values",
+                        "text/plain", "application/csv", "application/vnd.ms-excel", "application/octet-stream"))
+                }, PEDIDO_IMPORTAR)
+                return true
+            }
+            MENU_EXPORTAR -> {
+                if (Contactos.todos(this).isEmpty()) { avisar("No hay contactos para exportar"); return true }
+                startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "text/csv"
+                    putExtra(Intent.EXTRA_TITLE, "contactos-mensajes-${LocalDate.now()}.csv")
+                }, PEDIDO_EXPORTAR)
+                return true
+            }
+        }
         return super.onOptionsItemSelected(item)
+    }
+
+    override fun onActivityResult(pedido: Int, resultado: Int, datos: Intent?) {
+        super.onActivityResult(pedido, resultado, datos)
+        val uri = datos?.data
+        if (resultado != RESULT_OK || uri == null) return
+        when (pedido) {
+            PEDIDO_IMPORTAR -> vistaPreviaImportacion(uri) { armar() }
+            PEDIDO_EXPORTAR -> {
+                val n = Contactos.todos(this).size
+                val ok = runCatching {
+                    contentResolver.openOutputStream(uri, "wt")?.use { it.write(CsvContactos.exportar(this).toByteArray()) }
+                        ?: error("sin salida")
+                }.isSuccess
+                if (ok) Registro.anotar(this, "Exportar contactos (CSV): $n contacto(s)")
+                avisar(if (ok) "Exportados $n contacto(s)" else "No se pudo guardar el archivo")
+            }
+        }
+    }
+
+    private companion object {
+        const val MENU_IMPORTAR = 1
+        const val MENU_EXPORTAR = 2
+        const val PEDIDO_IMPORTAR = 11
+        const val PEDIDO_EXPORTAR = 12
     }
 
     private fun armar() {

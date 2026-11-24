@@ -218,7 +218,8 @@ object Contactos {
         return todos(ctx).firstOrNull { it.id != excepto && it.numeroWhatsapp() == d }
     }
 
-    private fun guardarTodos(ctx: Context, lista: List<Contacto>) {
+    /** Guarda la lista completa (también lo usa la importación CSV, de una sola vez). */
+    fun guardarTodos(ctx: Context, lista: List<Contacto>) {
         val arr = JSONArray()
         lista.forEach {
             arr.put(JSONObject().put("id", it.id).put("nombre", it.nombre).put("numero", it.numero).put("def", it.porDefecto))

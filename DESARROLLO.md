@@ -14,22 +14,20 @@
 | URL publicada | APK: https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk |
 | Tipo | Android APK (Kotlin nativo, compilado en GitHub Actions) |
 | Estado | En desarrollo |
-| Última versión (Release) | **v0.0.12** (24-11-2026) |
+| Última versión (Release) | **v0.0.13** (24-11-2026) |
 | Se conecta con | WhatsApp (por intent, sin API) · núcleo `luchorcompartidos/nucleo-android` (submódulo `nucleo/`) · a futuro Google Sheets |
 
 ## 2. Etapa actual
-**Etapa 0.12 — Apertura automática de WhatsApp: cerrada** → Release **v0.0.12** (patch); núcleo 0.7.0 (`Apertura.kt`).
-- A la hora del envío (o de la posposición), con el celular **desbloqueado**, se abre sola la pantalla de envío y ésta abre WhatsApp con el primer pendiente; con varios contactos, al confirmar "Sí, enviado" sigue con el próximo ("No" corta la cadena). Lo perdido con el celular apagado no se abre solo.
-- Ajustes → "Apertura automática": interruptor (**encendido por defecto**), estado del permiso "Mostrar sobre otras apps" (✓/✗ + "Conceder"), ayuda de "Permitir ajustes restringidos" y **"Probar apertura automática"** (envío de prueba en 1 minuto a un contacto elegido, sigue la opción de Ajustes).
-- Por envío (editor): "Abrir WhatsApp automáticamente: Según Ajustes / Sí / No" (campo `autoAbrir`, clave "auto"; envíos viejos = según Ajustes).
-- Cartel en la principal si la opción está encendida y falta el permiso (lleva directo a la pantalla del permiso; se revisa al volver).
-- Registro: "apertura automática: NO (motivo)" / "pedida a Android" / "se abrió la pantalla de envío" (si está "pedida" sin "se abrió", Android la bloqueó).
-- **A probar en el celular:** v0.0.12 (casos de `DEFINICIONES.md` 0.5) + lo pendiente de la v0.0.5 a v0.0.11.
+**Etapa 0.13 — Importar y exportar contactos (CSV): cerrada** → Release **v0.0.13** (patch). Sin cambios en el núcleo.
+- Contactos → menú ⋮ → **"Importar…"**: selector de archivos de Android (CSV de Sheets *Archivo > Descargar > CSV*, Excel o Drive). Columnas `numero` (obligatoria), `nombre`, `lista` (varias con `,`), `default`. **Vista previa**: "N nuevos · M ya existen · K con error" + listas nuevas + errores y avisos por fila → Importar / Cancelar. Suma y actualiza, nunca borra.
+- **"Exportar…"**: guarda `contactos-mensajes-AAAA-MM-DD.csv` con el selector (ahí aparece Drive); mismas columnas, listo para reimportar.
+- Detalle de reglas (normalización, `default` solo marca, formato científico, aviso sin código de país, UTF-8/Windows-1252): `DEFINICIONES.md` A.2.
+- **A probar en el celular:** v0.0.13 (exportar → abrir en Sheets → editar → descargar CSV → importar; probar con Excel y separador `;`; duplicados y errores) + lo pendiente de la v0.0.5 a v0.0.12.
 - En curso: —. **Pendiente del usuario:** tag **v0.7.0** del núcleo (ver DESARROLLO.md de `nucleo-android`).
 
 ## 3. Próximos pasos
-1. **Probar la v0.0.12** (apertura automática: casos de `DEFINICIONES.md` 0.5; incluye lo de la v0.0.5 a v0.0.11) en el celular y corregir lo que aparezca.
-2. **0.13 — Importar y exportar contactos (CSV)** (A), **0.14 — Importar envíos (CSV)** (A.3) y **0.15 — SMS** (B).
+1. **Probar la v0.0.13** (importar/exportar CSV) y la v0.0.12 (apertura automática: casos de `DEFINICIONES.md` 0.5; incluye lo de la v0.0.5 a v0.0.11) en el celular y corregir lo que aparezca.
+2. **0.14 — Importar envíos (CSV)** (`DEFINICIONES.md` A.3; reutiliza `Csv.kt`) y **0.15 — SMS** (B).
 3. Migrar Recordatorios al núcleo: por ahora no (decisión 24-11). A definir: grupo Default como lista.
 
 ## 4. Decisiones tomadas
@@ -65,19 +63,21 @@
 - 2026-11-24 Google Sheets: **solo archivo CSV** (sin link publicado, por privacidad). Orden: contactos (importar + exportar) → envíos → SMS. Duplicados por número: se actualiza el nombre solo en la app (no agenda ni WhatsApp). Detalle en `DEFINICIONES.md`.
 - 2026-11-24 SMS: modo **por contacto** (WhatsApp/SMS/Ambos, como Recordatorios), ajustable por destinatario **solo para cada envío**; por defecto **"Preguntar antes"** (automático opcional, con control de tamaño al guardar); largo y costo **igual que Recordatorios** (funciones llevadas al núcleo `Sms.kt`) + contador corto en el editor.
 - 2026-11-24 Migración de Recordatorios al núcleo: por ahora no.
+- 2026-11-24 CSV de contactos en `:app` (no en el núcleo): Recordatorios no lo tiene. Importar = selector de Android (`ACTION_OPEN_DOCUMENT`, sin permisos); exportar = `ACTION_CREATE_DOCUMENT`. `default` solo marca; nombre vacío no pisa el existente.
 - 2026-11-24 Apertura automática de WhatsApp (permiso "Mostrar sobre otras apps", que da el usuario: no se puede otorgar al instalar): **encendida por defecto**, se apaga en Ajustes o por envío; mecanismo en el núcleo, qué abrir en la app; notificación siempre como respaldo. Va **antes de Sheets**. Celular de prueba: Moto g84 5G, Android 15.
 - 2026-11-24 Apertura automática implementada: la pantalla de envío es la que se abre (no WhatsApp directo), así sigue el "¿Se envió?"; en modo automático encadena los contactos tras "Sí, enviado". También al sonar una posposición. La prueba sigue la opción de Ajustes (para probar también "apagada").
 - 2026-11-23 "Usar plantilla" / "Guardar como plantilla" trabajan sobre el último campo de texto tocado (igual que "Insertar variable"); "Agregar" va al final, en renglón nuevo; no se guardan dos plantillas con el mismo texto.
 
 ## 5. Pendientes / dudas abiertas
-- [ ] Probar en el celular la v0.0.12 (incluye lo de la v0.0.5 a v0.0.11; ver sección 2).
+- [ ] Probar en el celular la v0.0.13 y la v0.0.12 (incluye lo de la v0.0.5 a v0.0.11; ver sección 2).
+- [ ] ¿Sumar "Compartir" al exportar (necesita un proveedor de archivos propio, sin AndroidX)? Hoy se guarda con el selector (incluye Drive).
 - [ ] Crear el tag v0.7.0 del núcleo.
 - [ ] Futuro: columnas extra de la planilla como variables por contacto (`DEFINICIONES.md` A.4).
 - [ ] ¿Pasar `Contactos`/`Agenda` y las pantallas al núcleo cuando se migre Recordatorios?
 - [ ] ¿Pasar el grupo Default a ser una lista más?
 
 ## 6. Datos técnicos clave
-- Definiciones de funciones grandes: `DEFINICIONES.md`. Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`, `autoAbrir`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes", incluye "auto_abrir"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + apertura automática + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`), `Apertura.kt` (`Apertura`: permiso de superposición, bloqueo, apertura al vencer); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
+- Definiciones de funciones grandes: `DEFINICIONES.md`. Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`, `autoAbrir`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes", incluye "auto_abrir"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + apertura automática + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`), `Csv.kt` (`Csv`: leer/escribir CSV; `CsvContactos`: analizar/importar/exportar; `vistaPreviaImportacion`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`), `Apertura.kt` (`Apertura`: permiso de superposición, bloqueo, apertura al vencer); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
 - Requisitos heredados: minSdk 34 (Android 14), compileSdk/targetSdk 35. Permisos de alarmas (`POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT`, `SYSTEM_ALERT_WINDOW`) y receivers declarados en el manifiesto de `:nucleo`; `INTERNET` (Releases de GitHub) también en `:nucleo`; `READ_CONTACTS` en el manifiesto de `:app` (solo para validar); falta `SEND_SMS` (solo con SMS automático).
 - Configuración / servicios: Secrets `KEYSTORE_B64` y `KEYSTORE_PASS` cargados (los mismos de Recordatorios; alias `recordatorios`, o el Secret `KEYSTORE_ALIAS` si se cambia la clave). Respaldo: `secretos-github.txt` del chat "Recordatorios PWA vs app nativa" (14-11-2026).
 - Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`, checkout con submódulos) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
@@ -100,6 +100,7 @@
 - 2026-11-24: Etapa 0.11: repetición de envíos (regla en el núcleo 0.6.0, cada vez separada en un envío aparte, "Enviar ahora" adelanta la vez) → Release **v0.0.11** (patch).
 - 2026-11-24: Definiciones de Google Sheets (CSV) y SMS en `DEFINICIONES.md`, propuestas y confirmadas; definida la apertura automática de WhatsApp (etapa 0.12) → sin Release (solo documentación).
 - 2026-11-24: Etapa 0.12: apertura automática de WhatsApp (núcleo 0.7.0 `Apertura`, opción en Ajustes y por envío, cartel de permiso, prueba en 1 minuto, Registro) → Release **v0.0.12** (patch).
+- 2026-11-24: Etapa 0.13: importar contactos desde CSV con vista previa y exportar a CSV (`Csv.kt`, menú ⋮ de Contactos) → Release **v0.0.13** (patch).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*

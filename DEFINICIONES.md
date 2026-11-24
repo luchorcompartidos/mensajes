@@ -38,7 +38,7 @@ A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp sol
 - **No** se usa link publicado (los números quedarían públicos). Sin internet, sin login. Sirve también con Excel.
 - Futuro posible (no ahora): Apps Script para sincronizar. Descartado: API de Google con login.
 
-### A.2 Contactos (etapa 0.13) — pantalla Contactos, menú "Importar…" / "Exportar…"
+### A.2 Contactos (etapa 0.13 → Release Patch v0.0.13) — pantalla Contactos, menú "Importar…" / "Exportar…" — **implementada**
 | Columna | Obligatoria | Uso |
 |---|---|---|
 | `numero` | sí | Se normaliza como hoy (`numeroWhatsapp`, 549…). |
@@ -48,6 +48,8 @@ A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp sol
 | `modo` | no | Se suma en la etapa SMS: WhatsApp / SMS / Ambos. |
 - **Duplicados** (mismo número normalizado): se **actualiza el nombre** sin preguntar. Solo cambia la lista de contactos **de la app** (no la agenda de Android ni WhatsApp). Efecto: los envíos no enviados muestran y usan en `{nombre}` el nombre nuevo (los envíos guardan el contacto, no el nombre).
 - **Exportar contactos a CSV**: mismas columnas; el archivo se comparte o se guarda con el selector de Android (respaldo o para armar la planilla).
+- Implementado (`Csv.kt`): el número se guarda normalizado (solo dígitos, 549…); `default` solo **marca** ("sí", "x", "1", TRUE de casilla de Sheets), no desmarca; nombre vacío no borra el nombre existente; encabezados alternativos `telefono`/`celular`/`whatsapp` y `listas`. Número repetido en el archivo = error de esa fila; número en formato científico (`5,49E+12`, típico de Excel) = error con ayuda; 10 dígitos o menos = aviso "¿sin código de país?" (se importa igual). Archivo UTF-8 o Windows-1252 (Excel).
+- Exportar: se guarda con el selector de Android (ahí aparece también Google Drive); UTF-8 con BOM, separador `,`, `default` = sí/no. No hay botón "Compartir" aparte (necesitaría un proveedor de archivos; a sumar si hace falta).
 
 ### A.3 Envíos (etapa 0.14) — pantalla principal, "Importar envíos"
 | titulo | fecha | hora | numero | texto |
@@ -100,7 +102,7 @@ Se llevan al núcleo (`Sms.kt`) las funciones de Recordatorios (`Envios.medir`, 
 ## C. Orden de etapas
 1. Probar la v0.0.11 (pendiente).
 2. **0.12** — Apertura automática de WhatsApp (sección 0) → Patch v0.0.12.
-3. **0.13** — Importar y exportar contactos (CSV).
+3. **0.13** — Importar y exportar contactos (CSV) → Patch v0.0.13 (**hecha**).
 4. **0.14** — Importar envíos (CSV).
 5. **0.15** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo).
 6. Después: variables desde la planilla, elegir SIM, Apps Script.
