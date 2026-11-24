@@ -47,7 +47,7 @@ object ManejadorMensajes : Manejador {
     private fun resumen(ctx: Context, e: Envio): String {
         val t = Envios.resumenTexto(e)
         if (e.modo != ModoTexto.MISMO || e.destinos.size != 1 || !Variables.usa(t)) return t
-        return Variables.aplicar(t, Contactos.obtener(ctx, e.destinos[0].contactoId), Tiempo.zdt(e.momento))
+        return Variables.aplicar(ctx, t, Contactos.obtener(ctx, e.destinos[0].contactoId), e.destinos[0], Tiempo.zdt(e.momento))
     }
 
     override fun avisos(ctx: Context): List<Aviso> =

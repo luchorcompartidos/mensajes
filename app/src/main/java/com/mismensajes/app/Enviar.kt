@@ -440,9 +440,12 @@ class EnviarActivity : Activity() {
                 setTextColor(getColor(RN.color.texto2))
             })
             if (e.modo == ModoTexto.POR_CONTACTO || Variables.usa(e.texto)) addView(TextView(this@EnviarActivity).apply {
-                text = Variables.aplicar(e.textoPara(d), c)
+                val propias = Variables.propias(this@EnviarActivity)
+                val faltan = Variables.faltantes(e.textoPara(d), Variables.datos(c, d), propias)
+                text = Variables.aplicar(e.textoPara(d), c, java.time.ZonedDateTime.now(), Variables.datos(c, d), propias) +
+                    if (faltan.isEmpty() || d.listo) "" else "\n⚠ Sin valor: ${faltan.joinToString(", ")} (se envía vacío)"
                 textSize = 14f
-                maxLines = 2
+                maxLines = if (faltan.isEmpty() || d.listo) 2 else 4
                 ellipsize = TextUtils.TruncateAt.END
                 setTextColor(getColor(RN.color.texto3))
                 setPadding(0, (4 * dp).toInt(), 0, 0)
@@ -491,7 +494,7 @@ class EnviarActivity : Activity() {
                 .show()
             return
         }
-        val error = WhatsApp.abrir(this, c.numeroWhatsapp(), Variables.aplicar(e.textoPara(d), c), cual)
+        val error = WhatsApp.abrir(this, c.numeroWhatsapp(), Variables.aplicar(this, e.textoPara(d), c, d), cual)
         if (error != null) { avisar(error); return }
         esperando = contactoId
         Registro.anotar(this, "#$envioId ${WhatsApp.nombre(cual)} abierto para «${c.etiqueta}»")

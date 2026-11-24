@@ -70,7 +70,16 @@ A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp sol
 - Fecha `dd/mm/aaaa`, hora `hh:mm` (24 h).
 - **Vista previa antes de importar**: "N nuevos · M ya existen (se actualiza el nombre) · K con error" + lista de errores por fila → Importar / Cancelar.
 - Lo importado se **copia** (no queda enlazado). Reimportar suma y actualiza, **nunca borra**.
-- Futuro: columnas extra como variables por contacto (`{turno}`, `{monto}`).
+- Columnas extra = variables propias (ver A.5).
+
+### A.5 Variables desde la planilla (etapa 0.16 → Release Patch v0.0.17) — **implementada**
+- **Origen: los dos CSV** (decisión 24-11). Cada columna que el lector no conoce es una variable propia: el encabezado se normaliza ("Monto a pagar" → `{monto_a_pagar}`; sin mayúsculas ni tildes; espacios y signos → `_`).
+  - **CSV de contactos**: el valor queda **en el contacto** (`Contacto.datos`) y sirve en cualquier envío (ej. `{empresa}`). Reimportar: una celda vacía **no borra** el valor que tenía. Exportar suma una columna por variable.
+  - **CSV de envíos**: el valor queda **en ese destinatario de ese envío** (`Destino.datos`, ej. `{turno}`) y **pisa** al del contacto. Al actualizar un envío existente, solo los pendientes toman los valores nuevos (celda vacía no borra).
+- No pueden ser variables: encabezados vacíos, columnas que el lector ya usa (`Variables.RESERVADAS`) ni nombres de variables de la app (`nombre`, `fecha`…): aviso en la vista previa. Dos columnas con la misma variable: vale la primera.
+- **Sin valor** (decisión 24-11): la variable se reemplaza por nada (se acomodan los espacios, como `{nombre}` vacío) y se **avisa** en la vista previa de la importación ("Fila N: sin valor para {monto}"), en la edición del envío y en la pantalla de envío. Una llave que no es ninguna variable conocida sigue quedando tal cual.
+- En la app: "Insertar variable" lista también las propias; la vista previa de plantillas las muestra como «monto»; la **ficha del contacto** muestra y edita sus datos ("Agregar dato…"; vacío = sin valor). Los valores del envío no se editan en la app (se cambian reimportando).
+- Copias: plantillas, listas y repetición se comportan como siempre (cada vez de un envío que se repite conserva los valores del envío).
 
 ---
 
@@ -96,7 +105,7 @@ Se llevan al núcleo (`Sms.kt`) las funciones de Recordatorios (`Envios.medir`, 
 - Si se divide: "El SMS se dividiría en N partes" + destinatarios y SMS por cada uno → **Enviar igual / Editar SMS / No enviar SMS / Convertir caracteres**. Editar SMS: contador en vivo y "✓ entra en 1 SMS", solo para ese envío.
 - **Modo automático**: ese control se hace **al guardar el envío** (no hay nadie para responder a la hora del envío).
 - Ajustes: interruptor general de SMS y "Enviar SMS de prueba" (con confirmación de envío real y posible costo).
-- Implementación (v0.0.16): "Convertir caracteres" está dentro del control (no en el editor, para no cambiar el texto de WhatsApp). Con variables, una pregunta por texto distinto. `enviarSmsPrueba` quedó en la app (`SmsApp.enviarPrueba`), no en el núcleo: alinear al migrar Recordatorios.
+- Implementación (v0.0.16): "Convertir caracteres" está dentro del control (no en el editor, para no cambiar el texto de WhatsApp). Con variables, una pregunta por texto distinto. `enviarSmsPrueba` pasó al núcleo en la 0.9.0 (`Sms.enviarPrueba`, junto con `Sms.enCamino`/`olvidar`); el aviso del resultado sigue en la app.
 
 ### B.4 Datos técnicos
 - `SEND_SMS` se pide la primera vez que se usa SMS. Si Android lo bloquea (app instalada a mano): *Info de la app > Permitir ajustes restringidos*.
@@ -113,5 +122,6 @@ Se llevan al núcleo (`Sms.kt`) las funciones de Recordatorios (`Envios.medir`, 
 3. **0.13** — Importar y exportar contactos (CSV) → Patch v0.0.13 (**hecha**).
 4. **0.14** — Importar envíos (CSV) (**hecha**).
 5. **0.15** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo): **hecha** (parte A v0.0.15, parte B v0.0.16).
-6. Después: variables desde la planilla, elegir SIM, Apps Script.
+6. **0.16** — Variables desde la planilla (A.5) → Patch v0.0.17 (**hecha**).
+7. Después: elegir SIM, Apps Script.
 - Migración de Recordatorios al núcleo: **por ahora no**.

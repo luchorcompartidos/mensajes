@@ -306,7 +306,8 @@ class EditarActivity : Activity() {
             return
         }
         val c = contactoId?.let { Contactos.obtener(this, it) }
-        val texto = Sms.paraSms(Variables.aplicar(campo.text.toString(), c, ZonedDateTime.of(fecha, hora, ZoneId.systemDefault())))
+        val texto = Sms.paraSms(Variables.aplicar(this, campo.text.toString(), c, destinoPrevio(contactoId),
+            ZonedDateTime.of(fecha, hora, ZoneId.systemDefault())))
         val divide = Sms.partes(texto) > 1
         val para = if (campo !== edTexto && c != null) " para ${c.etiqueta}" else ""
         txtSms.text = "SMS$para: " + if (detalleSms || divide) Sms.descripcionTamanio(texto) else Sms.resumenCorto(texto)
@@ -380,12 +381,24 @@ class EditarActivity : Activity() {
         val contactoId = if (campo === edTexto) seleccion.firstOrNull()
                          else camposTexto.entries.firstOrNull { it.value === campo }?.key
         val c = contactoId?.let { Contactos.obtener(this, it) }
-        val raras = Variables.desconocidas(texto)
+        val propias = Variables.propias(this)
+        val raras = Variables.desconocidas(texto, propias)
+        // Variables propias sin valor: en "mismo texto" se revisan todos los contactos elegidos.
+        val revisar = if (campo === edTexto) seleccion.toList() else listOfNotNull(contactoId)
+        val sinValor = revisar.mapNotNull { id ->
+            val f = Variables.faltantes(texto, Variables.datos(Contactos.obtener(this, id), destinoPrevio(id)), propias)
+            if (f.isEmpty()) null else (Contactos.obtener(this, id)?.etiqueta ?: "?") + " (" + f.joinToString(", ") + ")"
+        }
         txtVista.text = "Vista previa" + (c?.let { " para ${it.etiqueta}" } ?: "") + ": " +
-            Variables.aplicar(texto, c, ZonedDateTime.of(fecha, hora, ZoneId.systemDefault())) +
-            if (raras.isEmpty()) "" else "\n⚠ No se reconoce ${raras.joinToString(", ")}: se envía tal cual."
+            Variables.aplicar(this, texto, c, destinoPrevio(contactoId), ZonedDateTime.of(fecha, hora, ZoneId.systemDefault()), propias) +
+            (if (raras.isEmpty()) "" else "\n⚠ No se reconoce ${raras.joinToString(", ")}: se envía tal cual.") +
+            if (sinValor.isEmpty()) "" else "\n⚠ Sin valor (se envía vacío): ${sinValor.joinToString("; ")}"
         txtVista.visibility = View.VISIBLE
     }
+
+    /** El destinatario ya guardado de ese contacto (con sus valores propios del CSV de envíos), si el envío existía. */
+    private fun destinoPrevio(contactoId: Int?): Destino? =
+        contactoId?.let { id -> original?.destinos?.firstOrNull { it.contactoId == id } }
 
     /** Lista de variables; la elegida se inserta donde está el cursor del último campo de texto tocado. */
     private fun elegirVariable() {
@@ -570,7 +583,8 @@ class EditarActivity : Activity() {
             texto = textoComun,
             destinos = seleccion.map {
                 Destino(it, if (porContacto) textos[it] ?: "" else "", enviado = !deCero && previos[it]?.enviado == true,
-                    canal = canal(it), smsEnviado = !deCero && previos[it]?.smsEnviado == true)
+                    canal = canal(it), smsEnviado = !deCero && previos[it]?.smsEnviado == true,
+                    datos = previos[it]?.datos ?: emptyMap())
             },
             momento = momento,
             alarma = swAlarma.isChecked,

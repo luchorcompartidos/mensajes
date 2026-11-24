@@ -19,7 +19,8 @@ import java.time.ZonedDateTime
  * Importación de envíos desde CSV (etapa 0.14, `DEFINICIONES.md` A.3).
  * Una fila por destinatario; las filas con el mismo `titulo` + `fecha` + `hora` forman un envío.
  * Columnas: `titulo`, `fecha`, `hora`, `numero` o `nombre`, `texto` y, opcionales, `alarma`, `repeticion`, `veces`.
- * Suma y actualiza; nunca borra.
+ * Cualquier otra columna es una variable propia de ese destinatario en ese envío ({turno}, {monto}):
+ * se guarda en [Destino.datos] y pisa al valor del contacto. Suma y actualiza; nunca borra.
  */
 object CsvEnvios {
     private val COL_TITULO = setOf("titulo", "asunto")
@@ -34,7 +35,8 @@ object CsvEnvios {
     private val NO = setOf("no", "n", "0", "false", "falso")
 
     /** Destinatario de una fila: contacto existente ([contactoId] > 0) o número nuevo a crear como contacto. */
-    data class Dest(val fila: Int, val contactoId: Int, val numeroNuevo: String, val texto: String) {
+    data class Dest(val fila: Int, val contactoId: Int, val numeroNuevo: String, val texto: String,
+                    val datos: Map<String, String> = emptyMap()) {
         val clave get() = if (contactoId > 0) "c$contactoId" else "n$numeroNuevo"
     }
 
@@ -46,7 +48,8 @@ object CsvEnvios {
                      val regla: Regla, val reglaIndicada: Boolean, val dests: List<Dest>, val existente: Envio?)
 
     data class Analisis(val grupos: List<Grupo>, val contactosNuevos: Map<String, String>,
-                        val errores: List<String>, val avisos: List<String>, val errorGeneral: String? = null) {
+                        val errores: List<String>, val avisos: List<String>, val errorGeneral: String? = null,
+                        val variables: List<String> = emptyList()) {
         val nuevos get() = grupos.count { it.existente == null }
         val existentes get() = grupos.count { it.existente != null }
     }
@@ -115,6 +118,8 @@ object CsvEnvios {
         val porNumero = contactos.associateBy { it.numeroWhatsapp() }
         val nuevos = linkedMapOf<String, String>()   // número normalizado → nombre (para crear el contacto)
         val errores = mutableListOf<String>(); val avisos = mutableListOf<String>()
+        val vars = Csv.columnasVariables(filas[0], COL_TITULO + COL_FECHA + COL_HORA + COL_NUMERO + COL_NOMBRE + COL_TEXTO +
+            COL_ALARMA + COL_REPETICION + COL_VECES, avisos)
         val leidas = mutableListOf<FilaLeida>()
         val zona = ZoneId.systemDefault()
 
@@ -130,6 +135,7 @@ object CsvEnvios {
             val txt = if (iTex < f.size) f[iTex].trim('\r', '\n') else ""
             if (txt.isBlank()) { errores += "Fila $n: falta el texto"; return@forEachIndexed }
             val crudo = v(iNum); val nombre = v(iNom)
+            val datos = Csv.valoresVariables(f, vars)
             val dest: Dest = when {
                 crudo.isNotEmpty() -> {
                     if (crudo.contains("E+", ignoreCase = true)) {
@@ -139,20 +145,20 @@ object CsvEnvios {
                     val num = Contacto(0, "", crudo).numeroWhatsapp()
                     if (num.length < 6) { errores += "Fila $n: número inválido ($crudo)"; return@forEachIndexed }
                     val c = porNumero[num]
-                    if (c != null) Dest(n, c.id, "", txt)
+                    if (c != null) Dest(n, c.id, "", txt, datos)
                     else {
                         if (num !in nuevos) {
                             if (num.length <= 10) avisos += "Fila $n: $crudo parece no tener código de país (en Argentina, 549…)"
                             nuevos[num] = nombre
                         } else if (nuevos[num].isNullOrBlank() && nombre.isNotBlank()) nuevos[num] = nombre
-                        Dest(n, 0, num, txt)
+                        Dest(n, 0, num, txt, datos)
                     }
                 }
                 nombre.isNotEmpty() -> {
                     val k = Csv.normalizar(nombre)
                     val iguales = contactos.filter { Csv.normalizar(it.etiqueta) == k }
                     when (iguales.size) {
-                        1 -> Dest(n, iguales[0].id, "", txt)
+                        1 -> Dest(n, iguales[0].id, "", txt, datos)
                         0 -> { errores += "Fila $n: no hay ningún contacto llamado «$nombre» (poné el número)"; return@forEachIndexed }
                         else -> { errores += "Fila $n: hay ${iguales.size} contactos llamados «$nombre» (poné el número)"; return@forEachIndexed }
                     }
@@ -225,9 +231,18 @@ object CsvEnvios {
                 if (reglaArch == null && existente != null) existente.regla else candidata,
                 reglaArch != null, dests, existente)
         }
+        // Variables propias que el texto usa y a ese destinatario le faltan (se envían vacías).
+        val propias = (Variables.propias(ctx) + vars.values).distinct()
+        val porId = contactos.associateBy { it.id }
+        grupos.forEach { g ->
+            g.dests.forEach { d ->
+                val f = Variables.faltantes(d.texto, Variables.datos(porId[d.contactoId], null) + d.datos, propias)
+                if (f.isNotEmpty()) avisos += "Fila ${d.fila}: sin valor para ${f.joinToString(", ")} (se envía vacío)"
+            }
+        }
         // Solo se crean los contactos nuevos que quedaron en algún envío válido.
         val usados = grupos.flatMap { g -> g.dests.map { it.numeroNuevo } }.toSet()
-        return Analisis(grupos, nuevos.filterKeys { it in usados }, errores, avisos)
+        return Analisis(grupos, nuevos.filterKeys { it in usados }, errores, avisos, variables = vars.values.toList())
     }
 
     /** Junta textos: si todos son iguales, "mismo texto"; si no, "un texto por contacto". */
@@ -252,15 +267,16 @@ object CsvEnvios {
         fun idDe(d: CsvEnvios.Dest) = if (d.contactoId > 0) d.contactoId else idNuevo.getValue(d.numeroNuevo)
         // Cada destinatario arranca con el modo de su contacto (WhatsApp / SMS / ambos).
         val modoDe = contactos.associate { it.id to it.modo }
-        fun destino(id: Int) = Destino(id, canal = modoDe[id] ?: ModoEnvio.WHATSAPP)
+        fun destino(id: Int, datos: Map<String, String>) = Destino(id, canal = modoDe[id] ?: ModoEnvio.WHATSAPP, datos = datos)
 
         // 2. Envíos.
         var creados = 0; var actualizados = 0
         a.grupos.forEach { g ->
             val desdeArchivo = g.dests.associate { idDe(it) to it.texto }
+            val datosArchivo = g.dests.associate { idDe(it) to it.datos }
             val actual = g.existente?.let { Envios.obtener(ctx, it.id) }?.takeIf { !it.cerrado }
             if (actual == null) {
-                val (modo, texto, destinos) = armar(desdeArchivo.map { (id, t) -> destino(id) to t })
+                val (modo, texto, destinos) = armar(desdeArchivo.map { (id, t) -> destino(id, datosArchivo[id].orEmpty()) to t })
                 val e = Envio(id = Envios.nuevoId(ctx), titulo = g.titulo, modo = modo, texto = texto, destinos = destinos,
                     momento = g.momento, alarma = g.alarma ?: Ajustes.alarmaPorDefecto(ctx), regla = g.regla)
                 Envios.guardar(ctx, e)
@@ -268,13 +284,15 @@ object CsvEnvios {
                 Programador.programar(ctx, ManejadorMensajes.comoAviso(ctx, e))
                 creados++
             } else {
-                // Los ya enviados conservan su texto; los pendientes toman el del archivo; los nuevos se suman al final.
+                // Los ya enviados conservan su texto y sus variables; los pendientes toman los del archivo
+                // (una celda vacía no borra el valor); los nuevos se suman al final.
                 val previos = actual.destinos.map { d ->
-                    val t = if (!d.listo && d.contactoId in desdeArchivo) desdeArchivo.getValue(d.contactoId) else actual.textoPara(d)
-                    d to t
+                    val pendiente = !d.listo && d.contactoId in desdeArchivo
+                    val t = if (pendiente) desdeArchivo.getValue(d.contactoId) else actual.textoPara(d)
+                    (if (pendiente) d.copy(datos = d.datos + datosArchivo[d.contactoId].orEmpty()) else d) to t
                 }
                 val sumados = desdeArchivo.filterKeys { id -> actual.destinos.none { it.contactoId == id } }
-                    .map { (id, t) -> destino(id) to t }
+                    .map { (id, t) -> destino(id, datosArchivo[id].orEmpty()) to t }
                 val (modo, texto, destinos) = armar(previos + sumados)
                 var e = actual.copy(modo = modo, texto = texto, destinos = destinos)
                 if (actual.activo) {
@@ -309,6 +327,9 @@ fun Activity.vistaPreviaEnvios(uri: Uri, alImportar: () -> Unit) {
         detalle.append("${a.nuevos} envío(s) nuevo(s) · ${a.existentes} ya existen (se actualizan) · ${a.errores.size} con error")
         if (a.contactosNuevos.isNotEmpty()) detalle.append("\n\nContactos nuevos (se crean): ")
             .append(a.contactosNuevos.entries.joinToString(", ") { (num, nom) -> nom.ifBlank { num } })
+        if (a.variables.isNotEmpty()) detalle.append("\n\nVariables propias (columnas extra): ")
+            .append(a.variables.joinToString(", ") { "{$it}" })
+            .append(". Valen para ese destinatario en ese envío y pisan a las del contacto.")
         bloqueCsv(detalle, "Envíos", a.grupos.map { g ->
             val e = g.existente
             val cabeza = "${g.titulo.ifBlank { "(sin título)" }} — ${Tiempo.completo(g.momento)}"

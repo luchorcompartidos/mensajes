@@ -80,12 +80,40 @@ object Csv {
         }
     } + "\r\n"
 
+    /**
+     * Columnas extra como variables propias (`DEFINICIONES.md` A.5): índice → clave ("Monto a pagar" → "monto_a_pagar").
+     * Se saltean los encabezados vacíos, los que el lector ya conoce ([conocidas], normalizados con [normalizar])
+     * y los que se llaman como una variable de la app (con aviso). Si dos columnas dan la misma clave, vale la primera.
+     */
+    fun columnasVariables(encabezados: List<String>, conocidas: Set<String>, avisos: MutableList<String>): Map<Int, String> {
+        val r = linkedMapOf<Int, String>()
+        encabezados.forEachIndexed { i, e ->
+            val crudo = e.replace("\uFEFF", "").trim()
+            if (crudo.isEmpty() || normalizar(crudo) in conocidas) return@forEachIndexed
+            val k = Variables.normalizar(crudo)
+            when {
+                k.isEmpty() -> avisos.add("Columna «$crudo»: no sirve como variable (usá letras o números)")
+                Variables.esDeLaApp(k) -> avisos.add("Columna «$crudo»: {$k} ya es una variable de la app; se ignora")
+                k in r.values -> avisos.add("Columna «$crudo»: repite la variable {$k}; se usa la primera")
+                else -> r.put(i, k)
+            }
+        }
+        return r
+    }
+
+    /** Valores de las variables propias de una fila (solo los que no están vacíos). */
+    fun valoresVariables(fila: List<String>, columnas: Map<Int, String>): Map<String, String> =
+        columnas.mapNotNull { (i, k) -> fila.getOrNull(i)?.trim()?.takeIf { it.isNotEmpty() }?.let { k to it } }.toMap()
+
     /** Encabezado o valor comparable: sin mayúsculas, tildes ni espacios de más. */
     fun normalizar(s: String): String =
         Normalizer.normalize(s.replace("\uFEFF", "").trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 }
 
-/** Importación y exportación de contactos (columnas `numero`, `nombre`, `lista`, `default`, `modo`). */
+/**
+ * Importación y exportación de contactos (columnas `numero`, `nombre`, `lista`, `default`, `modo`).
+ * Cualquier otra columna es una variable propia del contacto ({empresa}): se guarda en [Contacto.datos].
+ */
 object CsvContactos {
     private val COL_NUMERO = setOf("numero", "telefono", "celular", "whatsapp")
     private val COL_NOMBRE = setOf("nombre")
@@ -106,10 +134,12 @@ object CsvContactos {
     val SI = setOf("si", "s", "x", "1", "true", "verdadero", "yes")
 
     data class Fila(val fila: Int, val numero: String, val nombre: String, val listas: List<String>,
-                    val porDefecto: Boolean, val existente: Contacto?, val modo: ModoEnvio? = null)
+                    val porDefecto: Boolean, val existente: Contacto?, val modo: ModoEnvio? = null,
+                    val datos: Map<String, String> = emptyMap())
 
     data class Analisis(val filas: List<Fila>, val errores: List<String>, val avisos: List<String>,
-                        val listasNuevas: List<String>, val errorGeneral: String? = null) {
+                        val listasNuevas: List<String>, val errorGeneral: String? = null,
+                        val variables: List<String> = emptyList()) {
         val nuevos get() = filas.count { it.existente == null }
         val existentes get() = filas.count { it.existente != null }
     }
@@ -125,10 +155,12 @@ object CsvContactos {
             "Falta la columna «numero» en la primera fila (encabezados). Columnas encontradas: " +
                 filas[0].joinToString(", ") { "«${it.trim()}»" } + ".")
 
+        val avisos = mutableListOf<String>()
+        val vars = Csv.columnasVariables(filas[0], COL_NUMERO + COL_NOMBRE + COL_LISTA + COL_DEFAULT + COL_MODO, avisos)
         val actuales = Contactos.todos(ctx).associateBy { it.numeroWhatsapp() }
         val listasActuales = Listas.todas(ctx).map { Csv.normalizar(it.nombre) }.toSet()
         val vistos = mutableMapOf<String, Int>()
-        val ok = mutableListOf<Fila>(); val errores = mutableListOf<String>(); val avisos = mutableListOf<String>()
+        val ok = mutableListOf<Fila>(); val errores = mutableListOf<String>()
         val listasNuevas = linkedMapOf<String, String>()
         filas.drop(1).forEachIndexed { idx, f ->
             val n = idx + 2   // fila 1 = encabezados
@@ -150,9 +182,10 @@ object CsvContactos {
             listas.forEach { l -> Csv.normalizar(l).let { k -> if (k !in listasActuales) listasNuevas.putIfAbsent(k, l) } }
             val modo = leerModo(v(iModo))
             if (modo == null && v(iModo).isNotEmpty()) avisos += "Fila $n: modo «${v(iModo)}» no reconocido (whatsapp, sms o ambos): queda como está"
-            ok += Fila(n, numero, v(iNom), listas, Csv.normalizar(v(iDef)) in SI, actuales[numero], modo)
+            ok += Fila(n, numero, v(iNom), listas, Csv.normalizar(v(iDef)) in SI, actuales[numero], modo,
+                Csv.valoresVariables(f, vars))
         }
-        return Analisis(ok, errores, avisos, listasNuevas.values.toList())
+        return Analisis(ok, errores, avisos, listasNuevas.values.toList(), variables = vars.values.toList())
     }
 
     /** Aplica la importación: suma y actualiza, nunca borra. Devuelve un resumen. */
@@ -166,11 +199,11 @@ object CsvContactos {
             if (i >= 0) {
                 val c = contactos[i]
                 val nuevo = c.copy(nombre = f.nombre.ifBlank { c.nombre }, porDefecto = c.porDefecto || f.porDefecto,
-                    modo = f.modo ?: c.modo)
+                    modo = f.modo ?: c.modo, datos = c.datos + f.datos)   // celda vacía no borra el valor
                 if (nuevo != c) { contactos[i] = nuevo; actualizados++ }
                 idPorFila[f.fila] = c.id
             } else {
-                contactos += Contacto(proximo, f.nombre, f.numero, f.porDefecto, f.modo ?: ModoEnvio.WHATSAPP)
+                contactos += Contacto(proximo, f.nombre, f.numero, f.porDefecto, f.modo ?: ModoEnvio.WHATSAPP, f.datos)
                 idPorFila[f.fila] = proximo++
             }
         }
@@ -204,14 +237,15 @@ object CsvContactos {
         return resumen
     }
 
-    /** CSV con todos los contactos: mismas columnas que la importación. */
+    /** CSV con todos los contactos: mismas columnas que la importación, más una por cada variable propia. */
     fun exportar(ctx: Context): String {
         val listas = Listas.ordenadas(ctx)
-        val filas = mutableListOf(listOf("numero", "nombre", "lista", "default", "modo"))
+        val vars = Variables.propiasDeContactos(ctx)
+        val filas = mutableListOf(listOf("numero", "nombre", "lista", "default", "modo") + vars)
         Contactos.ordenados(ctx).forEach { c ->
             filas += listOf(c.numero, c.nombre,
                 listas.filter { c.id in it.contactos }.joinToString(", ") { it.etiqueta },
-                if (c.porDefecto) "sí" else "no", escribirModo(c.modo))
+                if (c.porDefecto) "sí" else "no", escribirModo(c.modo)) + vars.map { c.datos[it].orEmpty() }
         }
         return "﻿" + Csv.escribir(filas)   // BOM: Excel lo abre con tildes bien
     }
@@ -259,6 +293,9 @@ fun Activity.vistaPreviaImportacion(uri: Uri, alImportar: () -> Unit) {
     else {
         detalle.append("${a.nuevos} nuevo(s) · ${a.existentes} ya existen (se actualiza el nombre) · ${a.errores.size} con error")
         if (a.listasNuevas.isNotEmpty()) detalle.append("\n\nListas nuevas: ").append(a.listasNuevas.joinToString(", "))
+        if (a.variables.isNotEmpty()) detalle.append("\n\nVariables propias (columnas extra): ")
+            .append(a.variables.joinToString(", ") { "{$it}" })
+            .append(". Se guardan en cada contacto; una celda vacía no borra el valor que ya tenía.")
         bloqueCsv(detalle, "Errores (esas filas no se importan)", a.errores)
         bloqueCsv(detalle, "Revisar", a.avisos)
         detalle.append("\n\nSe suma y se actualiza; no se borra ningún contacto ni lista.")

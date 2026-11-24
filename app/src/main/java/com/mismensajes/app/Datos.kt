@@ -43,10 +43,13 @@ enum class ModoEnvio(val codigo: String, val texto: String) {
  * Control de tamaño del SMS (solo para este envío): [smsOk] = se aceptó que se divida ("Enviar igual");
  * [smsTexto] = texto del SMS editado o convertido (con las variables ya reemplazadas; "" = el mismo de WhatsApp).
  * [smsFalla]: motivo de la última falla del SMS ("" = ninguna).
+ * [datos]: valores de las variables propias para este destinatario en este envío (columnas extra del CSV
+ * de envíos; clave normalizada → valor). Pisan a los del contacto ([Contacto.datos]).
  */
 data class Destino(val contactoId: Int, val texto: String = "", val enviado: Boolean = false,
                    val canal: ModoEnvio = ModoEnvio.WHATSAPP, val smsEnviado: Boolean = false,
-                   val smsOk: Boolean = false, val smsTexto: String = "", val smsFalla: String = "") {
+                   val smsOk: Boolean = false, val smsTexto: String = "", val smsFalla: String = "",
+                   val datos: Map<String, String> = emptyMap()) {
     /** Ya se decidió qué hacer con el tamaño del SMS. */
     val smsDecidido get() = smsOk || smsTexto.isNotBlank()
     val waPendiente get() = canal.whatsapp && !enviado
@@ -101,6 +104,16 @@ data class Envio(
 
     /** Se puede enviar ya, aunque siga programado ("Enviar ahora"): no se cerró y queda alguien sin enviar. */
     val puedeEnviar: Boolean get() = !cerrado && faltan.isNotEmpty()
+}
+
+/** Variables propias (clave → valor) en JSON, para contactos y destinos. */
+internal fun datosAJson(m: Map<String, String>) = JSONObject().apply { m.forEach { (k, v) -> put(k, v) } }
+
+internal fun datosDesdeJson(o: JSONObject?): Map<String, String> {
+    if (o == null) return emptyMap()
+    val m = LinkedHashMap<String, String>()
+    o.keys().forEach { k -> m[k] = o.optString(k) }
+    return m
 }
 
 /** Envíos guardados en el celular (preferencias "envios"). */
@@ -206,6 +219,7 @@ object Envios {
             if (it.smsOk) d.getJSONObject(d.length() - 1).put("so", true)
             if (it.smsTexto.isNotEmpty()) d.getJSONObject(d.length() - 1).put("st", it.smsTexto)
             if (it.smsFalla.isNotEmpty()) d.getJSONObject(d.length() - 1).put("sf", it.smsFalla)
+            if (it.datos.isNotEmpty()) d.getJSONObject(d.length() - 1).put("dv", datosAJson(it.datos))
         }
         return JSONObject().put("id", e.id).put("titulo", e.titulo).put("modo", e.modo.codigo).put("texto", e.texto)
             .put("dest", d).put("momento", e.momento).put("alarma", e.alarma).put("activo", e.activo)
@@ -224,7 +238,7 @@ object Envios {
                 val x = d.getJSONObject(it)
                 Destino(x.getInt("c"), x.optString("t"), x.optBoolean("e", false),
                     ModoEnvio.de(x.optString("k", "W")), x.optBoolean("s", false),
-                    x.optBoolean("so", false), x.optString("st"), x.optString("sf"))
+                    x.optBoolean("so", false), x.optString("st"), x.optString("sf"), datosDesdeJson(x.optJSONObject("dv")))
             },
             momento = o.getLong("momento"), alarma = o.optBoolean("alarma", false),
             activo = o.optBoolean("activo", true), cerrado = o.optBoolean("cerrado", false),
@@ -239,9 +253,11 @@ object Envios {
 /**
  * Contacto de la lista propia de la app (se carga a mano, como en Recordatorios).
  * [porDefecto]: forma parte del grupo Default (se elige solo en cada envío nuevo; clave "def", como Recordatorios).
+ * [datos]: valores de las variables propias (columnas extra del CSV de contactos o cargados en su ficha;
+ * clave normalizada → valor, ej. "empresa" → "Acme"). Se usan en cualquier envío como {empresa}.
  */
 data class Contacto(val id: Int, val nombre: String, val numero: String, val porDefecto: Boolean = false,
-                    val modo: ModoEnvio = ModoEnvio.WHATSAPP) {
+                    val modo: ModoEnvio = ModoEnvio.WHATSAPP, val datos: Map<String, String> = emptyMap()) {
     val etiqueta get() = nombre.ifBlank { numero }
 
     /**
@@ -263,7 +279,7 @@ object Contactos {
         return List(arr.length()) {
             val o = arr.getJSONObject(it)
             Contacto(o.optInt("id", 0), o.optString("nombre"), o.optString("numero"), o.optBoolean("def", false),
-                ModoEnvio.de(o.optString("modo", "W")))
+                ModoEnvio.de(o.optString("modo", "W")), datosDesdeJson(o.optJSONObject("datos")))
         }
     }
 
@@ -300,7 +316,7 @@ object Contactos {
         val arr = JSONArray()
         lista.forEach {
             arr.put(JSONObject().put("id", it.id).put("nombre", it.nombre).put("numero", it.numero).put("def", it.porDefecto)
-                .put("modo", it.modo.codigo))
+                .put("modo", it.modo.codigo).apply { if (it.datos.isNotEmpty()) put("datos", datosAJson(it.datos)) })
         }
         prefs(ctx).edit().putString("l", arr.toString()).commit()
     }

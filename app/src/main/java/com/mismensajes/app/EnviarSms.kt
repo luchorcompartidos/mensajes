@@ -14,7 +14,6 @@ import com.mis.nucleo.Notificador
 import com.mis.nucleo.Programador
 import com.mis.nucleo.Registro
 import com.mis.nucleo.Sms
-import com.mis.nucleo.Tiempo
 import com.mis.nucleo.controlarTamanioSms
 import java.time.ZonedDateTime
 
@@ -31,26 +30,18 @@ object SmsApp {
     const val ACCION_ENVIAR = "com.mismensajes.app.ENVIAR_SMS"
     const val ACCION_REINTENTAR = "com.mismensajes.app.REINTENTAR_SMS"
     const val EXTRA_CONTACTO = "contacto"
-    private const val PRUEBA = "prueba"
 
     /**
      * Texto del SMS para ese destinatario: el editado/convertido en el control de tamaño, o el de WhatsApp
      * con las variables reemplazadas y "→" como "->" (igual que Recordatorios). [ahora]: para las variables de fecha/hora.
      */
     fun texto(ctx: Context, e: Envio, d: Destino, ahora: ZonedDateTime = ZonedDateTime.now()): String =
-        d.smsTexto.ifBlank { Sms.paraSms(Variables.aplicar(e.textoPara(d), Contactos.obtener(ctx, d.contactoId), ahora)) }
+        d.smsTexto.ifBlank { Sms.paraSms(Variables.aplicar(ctx, e.textoPara(d), Contactos.obtener(ctx, d.contactoId), d, ahora)) }
 
     private fun ref(id: Int, contactoId: Int) = "$id:$contactoId"
 
-    /**
-     * El SMS de ese contacto ya se le pasó a Android y falta la confirmación (para no mandarlo dos veces).
-     * Lee el estado que guarda el núcleo (`Sms.PREFS`); alinear con una función del núcleo cuando se pueda tocar.
-     */
-    fun enCamino(ctx: Context, id: Int, contactoId: Int) =
-        ctx.getSharedPreferences("sms_envios", Context.MODE_PRIVATE).contains(ref(id, contactoId))
-
-    private fun olvidarEnCamino(ctx: Context, ref: String) =
-        ctx.getSharedPreferences("sms_envios", Context.MODE_PRIVATE).edit().remove(ref).commit()
+    /** El SMS de ese contacto ya se le pasó a Android y falta la confirmación (núcleo: [Sms.enCamino]). */
+    fun enCamino(ctx: Context, id: Int, contactoId: Int) = Sms.enCamino(ctx, ref(id, contactoId))
 
     /** SMS que faltan mandar (sin los que están en camino). Con los SMS apagados en Ajustes, ninguno. */
     fun porMandar(ctx: Context, e: Envio): List<Destino> =
@@ -105,7 +96,7 @@ object SmsApp {
         if (d.smsFalla.isNotEmpty()) Envios.fallaSms(ctx, e.id, d.contactoId, "")
         quitarAvisoFalla(ctx, e.id, d.contactoId)
         val error = Sms.enviar(ctx, c.numero, texto(ctx, e, d), ref = r, etiqueta = c.etiqueta)
-        if (error != null) olvidarEnCamino(ctx, r)   // no salió: que no quede "en camino"
+        if (error != null) Sms.olvidar(ctx, r)   // no salió: que no quede "en camino"
         return error
     }
 
@@ -125,8 +116,8 @@ object SmsApp {
 
     /** Resultado que confirma Android (ref = "idEnvío:idContacto", o "prueba:…" para el SMS de prueba). */
     fun alResultado(ctx: Context, ref: String, ok: Boolean, motivo: String) {
+        if (Sms.esPrueba(ref)) { avisarPrueba(ctx, ok, motivo); return }
         val partes = ref.split(":")
-        if (partes.getOrNull(0) == PRUEBA) { avisarPrueba(ctx, ok, motivo); return }
         val id = partes.getOrNull(0)?.toIntOrNull() ?: return
         val contactoId = partes.getOrNull(1)?.toIntOrNull() ?: return
         val nombre = Contactos.obtener(ctx, contactoId)?.etiqueta ?: "(contacto borrado)"
@@ -204,9 +195,7 @@ object SmsApp {
     }
 
     /** "Enviar SMS de prueba" de Ajustes: un SMS real al número indicado; el resultado llega como aviso. */
-    fun enviarPrueba(ctx: Context, numero: String): String? =
-        Sms.enviar(ctx, numero, "Prueba de Programador de Mensajes (${Tiempo.completo(System.currentTimeMillis())})",
-            ref = "$PRUEBA:${System.currentTimeMillis()}", etiqueta = "prueba ($numero)")
+    fun enviarPrueba(ctx: Context, numero: String): String? = Sms.enviarPrueba(ctx, numero, "Programador de Mensajes")
 
     private fun avisarPrueba(ctx: Context, ok: Boolean, motivo: String) {
         Registro.anotar(ctx, "SMS de prueba: " + if (ok) "enviado" else "no salió ($motivo)")

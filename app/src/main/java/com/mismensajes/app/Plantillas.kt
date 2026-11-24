@@ -204,9 +204,11 @@ fun Activity.editarPlantilla(actual: Plantilla?, textoInicial: String = "", alGu
     fun actualizarVista() {
         val t = texto.text.toString()
         if (!Variables.usa(t)) { vista.visibility = View.GONE; return }
-        val raras = Variables.desconocidas(t)
+        val propias = Variables.propias(this)
+        val raras = Variables.desconocidas(t, propias)
+        // Las variables propias se muestran con su nombre: «monto».
         vista.text = "Vista previa (ejemplo: ${CONTACTO_EJEMPLO.nombre}, ahora): " +
-            Variables.aplicar(t, CONTACTO_EJEMPLO) +
+            Variables.aplicar(t, CONTACTO_EJEMPLO, java.time.ZonedDateTime.now(), propias.associateWith { "«$it»" }, propias) +
             if (raras.isEmpty()) "" else "\n⚠ No se reconoce ${raras.joinToString(", ")}: se envía tal cual."
         vista.visibility = View.VISIBLE
     }
@@ -297,13 +299,18 @@ fun Activity.confirmarBorrarPlantilla(p: Plantilla, alBorrar: () -> Unit) {
         .show()
 }
 
-/** Lista de variables; la elegida se inserta donde está el cursor de [campo]. La usan los envíos y las plantillas. */
+/**
+ * Lista de variables (las de la app y las propias, que vienen de la planilla); la elegida se inserta donde
+ * está el cursor de [campo]. La usan los envíos y las plantillas.
+ */
 fun Activity.insertarVariable(campo: EditText, despues: () -> Unit = {}) {
-    val items = Variables.LISTA.map { "{${it.clave}}  ·  ${it.descripcion}" }.toTypedArray()
+    val claves = Variables.LISTA.map { it.clave } + Variables.propias(this)
+    val items = (Variables.LISTA.map { "{${it.clave}}  ·  ${it.descripcion}" } +
+        Variables.propias(this).map { "{$it}  ·  Dato propio (columna de la planilla o ficha del contacto)" }).toTypedArray()
     AlertDialog.Builder(this, temaDialogo())
         .setTitle("Insertar variable")
         .setItems(items) { _, i ->
-            val v = "{${Variables.LISTA[i].clave}}"
+            val v = "{${claves[i]}}"
             val largo = campo.text.length
             val ini = campo.selectionStart.takeIf { it in 0..largo } ?: largo
             val fin = campo.selectionEnd.takeIf { it in 0..largo } ?: largo

@@ -229,6 +229,44 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
         }
         check(9100 + (actual?.modo ?: ModoEnvio.WHATSAPP).ordinal)
     }
+    // Datos para las variables propias ({empresa}, {turno}…): los mismos que las columnas extra del CSV.
+    val camposDatos = linkedMapOf<String, EditText>()
+    val cajaDatos = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+    fun agregarCampoDato(clave: String, valor: String) {
+        cajaDatos.addView(TextView(c).apply { text = "{$clave}"; textSize = 12f; setPadding(0, m / 3, 0, 0) })
+        val campo = EditText(c).apply { hint = "Valor de {$clave} (vacío = sin valor)"; setText(valor) }
+        camposDatos[clave] = campo
+        cajaDatos.addView(campo)
+    }
+    (Variables.propiasDeContactos(this) + actual?.datos?.keys.orEmpty()).distinct().sorted()
+        .forEach { agregarCampoDato(it, actual?.datos?.get(it).orEmpty()) }
+    val tituloDatos = TextView(c).apply {
+        text = "Datos para variables (opcional): se usan en el texto como {nombre_del_dato}."
+        textSize = 13f
+        setPadding(0, m / 2, 0, 0)
+    }
+    val agregarDato = Button(c).apply {
+        text = "Agregar dato…"
+        isAllCaps = false
+        setOnClickListener {
+            val campoNombre = EditText(c).apply { hint = "Nombre, ej.: empresa" }
+            AlertDialog.Builder(this@editarContacto, temaDialogo())
+                .setTitle("Nuevo dato")
+                .setView(LinearLayout(c).apply { setPadding(m, m / 2, m, 0); addView(campoNombre,
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)) })
+                .setPositiveButton("Agregar") { _, _ ->
+                    val k = Variables.normalizar(campoNombre.text.toString())
+                    when {
+                        k.isEmpty() -> avisar("Usá letras o números para el nombre")
+                        Variables.esDeLaApp(k) || k in Variables.RESERVADAS -> avisar("{$k} ya lo usa la app: elegí otro nombre")
+                        k in camposDatos -> camposDatos.getValue(k).requestFocus()
+                        else -> { agregarCampoDato(k, ""); camposDatos.getValue(k).requestFocus() }
+                    }
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
     val validar = Button(c).apply {
         text = "Validar en WA y recuperar"
         setOnClickListener {
@@ -251,7 +289,7 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
         orientation = LinearLayout.VERTICAL
         setPadding(m, m / 2, m, 0)
         addView(nombre); addView(numero); addView(validar); addView(resultadoWa); addView(tituloModo); addView(modos)
-        addView(porDefecto); addView(ayuda)
+        addView(porDefecto); addView(tituloDatos); addView(cajaDatos); addView(agregarDato); addView(ayuda)
     }
     val b = AlertDialog.Builder(this, temaDialogo())
         .setTitle(if (actual == null) "Agregar contacto" else "Editar contacto")
@@ -265,7 +303,8 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
                 return@setPositiveButton
             }
             val modo = ModoEnvio.entries.getOrElse(modos.checkedRadioButtonId - 9100) { ModoEnvio.WHATSAPP }
-            val nuevo = Contacto(id, nombre.text.toString().trim(), num, porDefecto.isChecked, modo)
+            val datos = camposDatos.mapValues { it.value.text.toString().trim() }.filterValues { it.isNotEmpty() }
+            val nuevo = Contacto(id, nombre.text.toString().trim(), num, porDefecto.isChecked, modo, datos)
             Contactos.guardar(this, nuevo)
             alGuardar(nuevo)
         }
