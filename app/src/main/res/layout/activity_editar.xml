@@ -221,6 +221,14 @@
             android:textColor="@color/texto"
             android:textSize="15sp" />
 
+        <!-- Apertura automática de WhatsApp en este envío (según Ajustes / sí / no). -->
+        <Button
+            android:id="@+id/btnAutoAbrir"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textAllCaps="false" />
+
         <Button
             android:id="@+id/btnGuardar"
             style="@style/Boton.Principal"

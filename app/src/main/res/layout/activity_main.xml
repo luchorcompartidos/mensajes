@@ -49,6 +49,18 @@
             android:textSize="14sp"
             android:visibility="gone" />
 
+        <!-- Apertura automática encendida sin el permiso "Mostrar sobre otras apps". -->
+        <TextView
+            android:id="@+id/avisoApertura"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@color/aviso_fondo"
+            android:padding="12dp"
+            android:textColor="@color/aviso_texto"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
         <!-- "Hay una versión nueva": al tocarla abre el diálogo con la descarga del instalador. -->
         <TextView
             android:id="@+id/avisoVersion"

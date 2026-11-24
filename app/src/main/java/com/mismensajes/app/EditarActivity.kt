@@ -53,6 +53,7 @@ class EditarActivity : Activity() {
     private lateinit var cajaTextos: LinearLayout
     private lateinit var swAlarma: Switch
     private lateinit var txtVista: TextView
+    private var autoAbrir: Boolean? = null                     // apertura automática: null = según Ajustes
     private var ultimoCampo: EditText? = null                  // campo de texto donde se inserta la variable
 
     // Repetición (igual que Recordatorios)
@@ -95,6 +96,7 @@ class EditarActivity : Activity() {
             fecha = z.toLocalDate()
             hora = z.toLocalTime().withSecond(0).withNano(0)
             swAlarma.isChecked = e.alarma
+            autoAbrir = e.autoAbrir
             mostrarRegla(e.regla)
             findViewById<TextView>(R.id.estadoEnvio).apply {
                 val t = estadoParaEditar(e)
@@ -134,6 +136,8 @@ class EditarActivity : Activity() {
             elegirHora(hora) { t -> hora = t; mostrarFechaHora() }
         }
         findViewById<Button>(R.id.btnGuardar).setOnClickListener { guardar() }
+        findViewById<Button>(R.id.btnAutoAbrir).setOnClickListener { elegirAutoAbrir() }
+        mostrarAutoAbrir()
         mostrarContactos()
         mostrarModo()
         mostrarFechaHora()
@@ -399,6 +403,21 @@ class EditarActivity : Activity() {
         dp.show()
     }
 
+    private fun mostrarAutoAbrir() {
+        findViewById<Button>(R.id.btnAutoAbrir).text =
+            "Abrir WhatsApp automáticamente: " + AjustesApp.textoAutoAbrir(this, autoAbrir)
+    }
+
+    private fun elegirAutoAbrir() {
+        val valores = listOf(null, true, false)
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Abrir WhatsApp automáticamente")
+            .setSingleChoiceItems(valores.map { AjustesApp.textoAutoAbrir(this, it) }.toTypedArray(),
+                valores.indexOf(autoAbrir)) { d, i -> autoAbrir = valores[i]; mostrarAutoAbrir(); d.dismiss() }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun guardar() {
         guardarCamposTexto()
         val porContacto = rbPorContacto.isChecked
@@ -452,7 +471,8 @@ class EditarActivity : Activity() {
             whatsapp = original?.whatsapp ?: "",
             regla = regla,
             ocurrencias = ocurrencias,
-            origen = original?.origen ?: 0
+            origen = original?.origen ?: 0,
+            autoAbrir = autoAbrir
         )
         // Cancela alarmas, posposición y notificación anteriores; después programa la nueva fecha.
         Programador.quitar(this, id)

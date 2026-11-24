@@ -36,7 +36,8 @@ data class Envio(
     val whatsapp: String = "",          // con qué WhatsApp se abre: "" = según Ajustes, o WhatsApp.COMUN/BUSINESS/PREGUNTAR
     val regla: Regla = Regla.NINGUNA,   // repetición (misma regla y claves que Recordatorios)
     val ocurrencias: Int = 0,           // veces que ya llegó su fecha (para "terminar después de X veces")
-    val origen: Int = 0                 // > 0 = es una vez separada del envío que se repite con ese id
+    val origen: Int = 0,                // > 0 = es una vez separada del envío que se repite con ese id
+    val autoAbrir: Boolean? = null      // abrir WhatsApp solo a la hora del envío: null = según Ajustes
 ) {
     /** Sigue programado y se repite. */
     val repite: Boolean get() = activo && !cerrado && regla.repite
@@ -138,6 +139,7 @@ object Envios {
             .put("dest", d).put("momento", e.momento).put("alarma", e.alarma).put("activo", e.activo)
             .put("cerrado", e.cerrado).put("posp", e.pospuestoHasta).put("wa", e.whatsapp)
             .put("ocurr", e.ocurrencias).put("origen", e.origen)
+            .apply { e.autoAbrir?.let { put("auto", it) } }
             .let { e.regla.ponerEn(it) }
     }
 
@@ -153,7 +155,8 @@ object Envios {
             momento = o.getLong("momento"), alarma = o.optBoolean("alarma", false),
             activo = o.optBoolean("activo", true), cerrado = o.optBoolean("cerrado", false),
             pospuestoHasta = o.optLong("posp", 0), whatsapp = o.optString("wa"),
-            regla = Regla.desde(o), ocurrencias = o.optInt("ocurr", 0), origen = o.optInt("origen", 0)
+            regla = Regla.desde(o), ocurrencias = o.optInt("ocurr", 0), origen = o.optInt("origen", 0),
+            autoAbrir = if (o.has("auto")) o.optBoolean("auto") else null
         )
     }
 }

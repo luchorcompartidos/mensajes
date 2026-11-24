@@ -58,14 +58,16 @@ object ManejadorMensajes : Manejador {
 
     override fun alVencer(ctx: Context, a: Aviso, pospuesto: Boolean, perdido: Boolean, avisar: Boolean) {
         val e = Envios.obtener(ctx, a.id)
+        // Apertura automática de WhatsApp solo a la hora (no con lo perdido mientras el celular estaba apagado).
         if (pospuesto || e == null) {
-            if (avisar) Notificador.mostrar(ctx, a, comoAlarma = a.alarma && !perdido, pospuesta = pospuesto)
+            if (avisar) Notificador.mostrar(ctx, a, comoAlarma = a.alarma && !perdido, pospuesta = pospuesto, abrir = !perdido)
             return
         }
         // Sin repetición: al vencer su fecha queda vencido (la posposición sigue aparte).
         // Con repetición: esa vez se separa en un envío aparte (es el que avisa) y el original sigue desde la próxima.
         val vez = if (e.regla.repite) separarVez(ctx, e) else e.copy(activo = false).also { Envios.guardar(ctx, it) }
-        if (avisar) Notificador.mostrar(ctx, comoAviso(ctx, vez), comoAlarma = vez.alarma && !perdido, pospuesta = false)
+        if (avisar) Notificador.mostrar(ctx, comoAviso(ctx, vez), comoAlarma = vez.alarma && !perdido, pospuesta = false,
+            abrir = !perdido)
     }
 
     override fun guardarPospuesto(ctx: Context, id: Int, hasta: Long) {
@@ -87,6 +89,28 @@ object ManejadorMensajes : Manejador {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return listOf(Notificador.boton(ctx, "Enviar", pi))
+    }
+
+    /**
+     * Apertura automática (el núcleo ya revisa permiso y bloqueo): abre la pantalla de envío en modo
+     * automático, que abre WhatsApp con el primer contacto pendiente.
+     */
+    override fun aperturaAutomatica(ctx: Context, a: Aviso): Intent? {
+        val e = Envios.obtener(ctx, a.id) ?: return null
+        if (!e.puedeEnviar || !AjustesApp.autoAbrir(ctx, e)) return null
+        return Intent(ctx, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, a.id)
+            .putExtra(EnviarActivity.EXTRA_AUTO, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    }
+
+    override fun motivoSinApertura(ctx: Context, a: Aviso): String {
+        val e = Envios.obtener(ctx, a.id) ?: return "el envío ya no existe"
+        return when {
+            !e.puedeEnviar -> "no queda nadie sin enviar"
+            e.autoAbrir == false -> "apagada en este envío"
+            !AjustesApp.autoAbrir(ctx, e) -> "apagada en Ajustes"
+            else -> "no corresponde"
+        }
     }
 
     /** Con "Enviar" no entra "Hecho" (Android muestra 3 botones): queda en la pantalla de envío y en la alarma. */

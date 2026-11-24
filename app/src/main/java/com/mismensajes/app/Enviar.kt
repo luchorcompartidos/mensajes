@@ -71,6 +71,20 @@ object AjustesApp {
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("mensajes_ajustes", Context.MODE_PRIVATE)
     fun whatsapp(ctx: Context): String = prefs(ctx).getString("whatsapp", WhatsApp.COMUN) ?: WhatsApp.COMUN
     fun guardarWhatsapp(ctx: Context, codigo: String) = prefs(ctx).edit().putString("whatsapp", codigo).apply()
+
+    /** "Abrir WhatsApp automáticamente" a la hora del envío: encendida por defecto. */
+    fun autoAbrir(ctx: Context): Boolean = prefs(ctx).getBoolean("auto_abrir", true)
+    fun guardarAutoAbrir(ctx: Context, valor: Boolean) = prefs(ctx).edit().putBoolean("auto_abrir", valor).apply()
+
+    /** Lo que vale para este envío (su elección, o la de Ajustes). */
+    fun autoAbrir(ctx: Context, e: Envio): Boolean = e.autoAbrir ?: autoAbrir(ctx)
+
+    /** Texto de la opción para un envío: "Según Ajustes (encendida)", "Sí" o "No". */
+    fun textoAutoAbrir(ctx: Context, valor: Boolean?): String = when (valor) {
+        null -> "Según Ajustes (" + (if (autoAbrir(ctx)) "encendida" else "apagada") + ")"
+        true -> "Sí, en este envío"
+        false -> "No, en este envío"
+    }
 }
 
 /** Cierra un envío (igual que "Hecho"): cancela alarmas y posposición, quita la notificación y sale del núcleo. */
@@ -114,9 +128,15 @@ fun separarVez(ctx: Context, e: Envio): Envio {
  * Pantalla de envío: recorre los contactos de un envío y abre WhatsApp con el texto de cada uno.
  * Al volver de WhatsApp pregunta si se envió y lo marca. Con todos enviados, el envío se cierra solo.
  * Se abre desde "Enviar" en la notificación, en la pantalla de alarma o en la tarjeta de la lista.
+ * Con la apertura automática ([EXTRA_AUTO], la abre el núcleo a la hora del envío) abre WhatsApp sola con el
+ * primer pendiente y, cada vez que se confirma "Sí, enviado", sigue con el próximo.
  */
 class EnviarActivity : Activity() {
+    companion object { const val EXTRA_AUTO = "auto" }
+
     private var envioId = -1
+    private var auto = false        // falta abrir WhatsApp solo con el primer pendiente (apertura automática)
+    private var cadena = false      // apertura automática en curso: tras "Sí, enviado" sigue con el próximo
     private var esperando = -1      // contacto al que se le abrió WhatsApp (falta confirmar si se envió)
     private var terminado = false   // se envió a todos en esta pantalla
     private var preguntando = false // el diálogo "¿Se envió?" está abierto
@@ -127,6 +147,9 @@ class EnviarActivity : Activity() {
         envioId = intent.getIntExtra(Programador.EXTRA_ID, -1)
         esperando = estado?.getInt("esperando", -1) ?: -1
         terminado = estado?.getBoolean("terminado", false) ?: false
+        auto = estado?.getBoolean("auto", false) ?: intent.getBooleanExtra(EXTRA_AUTO, false)
+        cadena = estado?.getBoolean("cadena", false) ?: auto
+        if (estado == null && auto) Registro.anotar(this, "#$envioId apertura automática: se abrió la pantalla de envío")
         // Si la alarma está sonando, se calla (la notificación queda en la bandeja).
         if (Notificador.sonando(this, envioId)) Notificador.silenciar(this, envioId)
         findViewById<Button>(R.id.enCerrar).setOnClickListener { cerrar() }
@@ -136,7 +159,12 @@ class EnviarActivity : Activity() {
         super.onNewIntent(nuevo)
         setIntent(nuevo)
         val id = nuevo.getIntExtra(Programador.EXTRA_ID, -1)
-        if (id != envioId) { envioId = id; esperando = -1; terminado = false }
+        if (id != envioId) { envioId = id; esperando = -1; terminado = false; cadena = false }
+        if (nuevo.getBooleanExtra(EXTRA_AUTO, false) && esperando == -1 && !preguntando) {
+            auto = true
+            cadena = true
+            Registro.anotar(this, "#$envioId apertura automática: se abrió la pantalla de envío")
+        }
         if (Notificador.sonando(this, envioId)) Notificador.silenciar(this, envioId)
     }
 
@@ -144,6 +172,8 @@ class EnviarActivity : Activity() {
         super.onSaveInstanceState(salida)
         salida.putInt("esperando", esperando)
         salida.putBoolean("terminado", terminado)
+        salida.putBoolean("auto", auto)
+        salida.putBoolean("cadena", cadena)
     }
 
     override fun onResume() {
@@ -156,6 +186,10 @@ class EnviarActivity : Activity() {
         }
         mostrar(e)
         if (esperando != -1 && !preguntando) confirmar(esperando)
+        else if (auto && !preguntando) {
+            auto = false
+            e.pendientes.firstOrNull()?.let { enviarA(it.contactoId) } ?: run { cadena = false }
+        }
     }
 
     private fun nombre(contactoId: Int) = Contactos.obtener(this, contactoId)?.etiqueta ?: "(contacto borrado)"
@@ -295,9 +329,12 @@ class EnviarActivity : Activity() {
                 esperando = -1
                 Registro.anotar(this, "#$envioId enviado a «${nombre(contactoId)}»")
                 Envios.marcarEnviado(this, envioId, contactoId)?.let { revisar(it) }
+                // Apertura automática: sigue con el próximo pendiente.
+                if (cadena) Envios.obtener(this, envioId)?.takeIf { !it.cerrado }?.pendientes?.firstOrNull()
+                    ?.let { enviarA(it.contactoId) } ?: run { cadena = false }
             }
-            .setNegativeButton("No") { _, _ -> respondido = true; esperando = -1 }
-            .setOnDismissListener { preguntando = false; if (!respondido) esperando = -1 }
+            .setNegativeButton("No") { _, _ -> respondido = true; esperando = -1; cadena = false }
+            .setOnDismissListener { preguntando = false; if (!respondido) { esperando = -1; cadena = false } }
             .show()
     }
 

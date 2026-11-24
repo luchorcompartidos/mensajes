@@ -12,6 +12,10 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import com.mis.nucleo.Ajustes
+import com.mis.nucleo.Apertura
+import com.mis.nucleo.Programador
+import com.mis.nucleo.Registro
+import com.mis.nucleo.Tiempo
 import com.mis.nucleo.Notificador
 import com.mis.nucleo.Nucleo
 import com.mis.nucleo.VersionGitHub
@@ -22,8 +26,17 @@ import com.mis.nucleo.R as RN
  * Ajustes de la app: con qué WhatsApp se abren los envíos (común, Business o preguntar cada vez; cada envío
  * puede cambiarlo desde su pantalla de envío), el botón de posponer rápido, si los envíos nuevos suenan como alarma y "Acerca de" (versión y Changelog).
  * Estos dos últimos se guardan en el núcleo (preferencias "ajustes", mismas claves que Recordatorios).
+ * También la apertura automática de WhatsApp (encendida por defecto) con el estado del permiso
+ * "Mostrar sobre otras apps" y un envío de prueba.
  */
 class AjustesActivity : Activity() {
+    private var refrescarPermiso: () -> Unit = {}
+
+    override fun onResume() {
+        super.onResume()
+        refrescarPermiso()   // al volver de la pantalla del permiso
+    }
+
     override fun onCreate(estado: Bundle?) {
         super.onCreate(estado)
         title = "Ajustes"
@@ -59,6 +72,43 @@ class AjustesActivity : Activity() {
             1 -> "En este celular solo está ${WhatsApp.nombre(instalados[0])}: se usa ese, sin importar este ajuste."
             else -> "No se encontró WhatsApp en este celular: los envíos se intentan abrir por el navegador."
         }))
+
+        caja.addView(subtitulo("Apertura automática"))
+        caja.addView(Switch(this).apply {
+            text = "Abrir WhatsApp automáticamente a la hora del envío"
+            textSize = 15f
+            setTextColor(getColor(RN.color.texto))
+            minHeight = (48 * dp).toInt()
+            isChecked = AjustesApp.autoAbrir(this@AjustesActivity)
+            setOnCheckedChangeListener { _, valor -> AjustesApp.guardarAutoAbrir(this@AjustesActivity, valor); refrescarPermiso() }
+        })
+        caja.addView(nota("Con el celular desbloqueado, a la hora del envío se abre WhatsApp con el chat y el texto ya " +
+            "escritos: solo falta tocar «Enviar». Con varios contactos, al confirmar «Sí, enviado» sigue con el próximo. " +
+            "Con el celular bloqueado, sin el permiso o con la opción apagada, avisa como siempre (alarma o notificación). " +
+            "La notificación sale siempre, de respaldo. En cada envío se puede cambiar."))
+        val estadoPermiso = nota("")
+        val btnPermiso = Button(this).apply {
+            isAllCaps = false
+            text = "Conceder «Mostrar sobre otras apps»"
+            setOnClickListener { pedirPermisoApertura() }
+        }
+        val ayudaPermiso = nota("Si Android no deja activarlo (app instalada a mano): Ajustes del sistema > Apps > " +
+            "Programador de Mensajes > ⋮ (arriba a la derecha) > «Permitir ajustes restringidos», y volvé a intentar.")
+        refrescarPermiso = {
+            val ok = Apertura.permitida(this)
+            estadoPermiso.text = "Permiso «Mostrar sobre otras apps»: " + if (ok) "✓ concedido" else "✗ falta"
+            btnPermiso.visibility = if (ok) android.view.View.GONE else android.view.View.VISIBLE
+            ayudaPermiso.visibility = btnPermiso.visibility
+        }
+        refrescarPermiso()
+        caja.addView(estadoPermiso)
+        caja.addView(btnPermiso)
+        caja.addView(ayudaPermiso)
+        caja.addView(Button(this).apply {
+            isAllCaps = false
+            text = "Probar apertura automática (envío de prueba en 1 minuto)"
+            setOnClickListener { probarApertura() }
+        })
 
         caja.addView(subtitulo("Avisos"))
         caja.addView(nota("El botón de posponer rápido es el que aparece en la notificación y en la pantalla de alarma. " +
@@ -118,6 +168,42 @@ class AjustesActivity : Activity() {
         })
 
         setContentView(ScrollView(this).apply { fitsSystemWindows = true; addView(caja) })
+    }
+
+    private fun pedirPermisoApertura() {
+        try { startActivity(Apertura.intentPermiso(this)) }
+        catch (e: Exception) { avisar("No se pudo abrir la pantalla del permiso: buscalo en Ajustes del sistema > Apps") }
+    }
+
+    /**
+     * Envío de prueba para dentro de 1 minuto, a un contacto elegido (sigue la opción de Ajustes, para poder
+     * probar también con la opción apagada). El resultado de cada intento queda en el Registro de eventos.
+     */
+    private fun probarApertura() {
+        val contactos = Contactos.todos(this)
+        if (contactos.isEmpty()) { avisar("Primero cargá un contacto en «Contactos»"); return }
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Probar con el contacto")
+            .setItems(contactos.map { it.etiqueta }.toTypedArray()) { _, i ->
+                val momento = System.currentTimeMillis() + 60_000L
+                val e = Envio(id = Envios.nuevoId(this), titulo = "Prueba de apertura automática",
+                    texto = "Prueba de apertura automática (no hace falta enviarlo)",
+                    destinos = listOf(Destino(contactos[i].id)), momento = momento)
+                Envios.guardar(this, e)
+                Registro.anotar(this, "#${e.id} envío de prueba de apertura automática creado")
+                Programador.programar(this, ManejadorMensajes.comoAviso(this, e))
+                AlertDialog.Builder(this, temaDialogo())
+                    .setTitle("Envío de prueba programado")
+                    .setMessage("Suena a las ${Tiempo.hora(momento)}:${"%02d".format(Tiempo.zdt(momento).second)}. " +
+                        "Dejá el celular como en el caso a probar (en el inicio, usando otra app, bloqueado…). " +
+                        "WhatsApp no envía nada solo: no hace falta tocar «Enviar». " +
+                        "El resultado queda en el «Registro de eventos» de la pantalla principal. " +
+                        "Después podés borrar el envío de prueba (mantener presionado en la lista).")
+                    .setPositiveButton("Entendido", null)
+                    .show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun elegirPosponerRapido(listo: () -> Unit) {

@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.mis.nucleo.Apertura
 import com.mis.nucleo.Nucleo
 import com.mis.nucleo.Permisos
 import com.mis.nucleo.Programador
@@ -86,6 +87,17 @@ class MainActivity : Activity() {
             visibility = if (faltante == null) View.GONE else View.VISIBLE
             text = faltante?.first
             setOnClickListener { faltante?.second?.let { startActivity(it) } }
+        }
+        // Apertura automática encendida pero sin el permiso: cartel que lleva directo a darlo.
+        findViewById<TextView>(R.id.avisoApertura).apply {
+            val falta = AjustesApp.autoAbrir(this@MainActivity) && !Apertura.permitida(this@MainActivity)
+            visibility = if (falta) View.VISIBLE else View.GONE
+            text = "Para que WhatsApp se abra solo a la hora del envío, falta el permiso «Mostrar sobre otras apps». " +
+                "Tocá acá para darlo (o apagá la opción en Ajustes)."
+            setOnClickListener {
+                try { startActivity(Apertura.intentPermiso(this@MainActivity)) }
+                catch (e: Exception) { startActivity(Intent(this@MainActivity, AjustesActivity::class.java)) }
+            }
         }
         val lista = findViewById<LinearLayout>(R.id.lista)
         lista.removeAllViews()

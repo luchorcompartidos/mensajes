@@ -6,7 +6,7 @@
 
 ---
 
-## 0. Apertura automática de WhatsApp (etapa 0.12 → Release Patch v0.0.12; núcleo 0.7.0)
+## 0. Apertura automática de WhatsApp (etapa 0.12 → Release Patch v0.0.12; núcleo 0.7.0) — **implementada**
 
 ### 0.1 Qué hace
 A la hora del envío, si el celular está **desbloqueado**, se abre WhatsApp solo con el chat y el texto ya escritos (falta solo tocar "Enviar"). Con varios contactos, un chat por vez; al volver, "¿Se envió?" y sigue el próximo (como hoy).
