@@ -57,9 +57,15 @@ object ManejadorMensajes : Manejador {
         Envios.obtener(ctx, id)?.takeIf { !it.cerrado }?.let { comoAviso(ctx, it) }
 
     override fun alVencer(ctx: Context, a: Aviso, pospuesto: Boolean, perdido: Boolean, avisar: Boolean) {
-        if (avisar) Notificador.mostrar(ctx, a, comoAlarma = a.alarma && !perdido, pospuesta = pospuesto)
-        // Un envío no se repite: al vencer su fecha queda vencido (la posposición sigue aparte).
-        if (!pospuesto) Envios.obtener(ctx, a.id)?.let { Envios.guardar(ctx, it.copy(activo = false)) }
+        val e = Envios.obtener(ctx, a.id)
+        if (pospuesto || e == null) {
+            if (avisar) Notificador.mostrar(ctx, a, comoAlarma = a.alarma && !perdido, pospuesta = pospuesto)
+            return
+        }
+        // Sin repetición: al vencer su fecha queda vencido (la posposición sigue aparte).
+        // Con repetición: esa vez se separa en un envío aparte (es el que avisa) y el original sigue desde la próxima.
+        val vez = if (e.regla.repite) separarVez(ctx, e) else e.copy(activo = false).also { Envios.guardar(ctx, it) }
+        if (avisar) Notificador.mostrar(ctx, comoAviso(ctx, vez), comoAlarma = vez.alarma && !perdido, pospuesta = false)
     }
 
     override fun guardarPospuesto(ctx: Context, id: Int, hasta: Long) {

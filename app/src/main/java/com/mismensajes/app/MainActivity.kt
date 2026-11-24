@@ -15,6 +15,7 @@ import android.widget.TextView
 import com.mis.nucleo.Nucleo
 import com.mis.nucleo.Permisos
 import com.mis.nucleo.Programador
+import com.mis.nucleo.Recurrencia
 import com.mis.nucleo.Registro
 import com.mis.nucleo.Tiempo
 import com.mis.nucleo.VersionGitHub
@@ -116,9 +117,31 @@ class MainActivity : Activity() {
 
     private fun estado(e: Envio): String = when {
         e.pospuestoHasta > 0 -> "Pospuesto hasta el ${Tiempo.completo(e.pospuestoHasta)}"
-        e.activo -> (if (e.alarma) "⏰ " else "") + Tiempo.completo(e.momento)
+        e.activo -> (if (e.alarma) "⏰ " else "") + Tiempo.completo(e.momento) +
+            if (e.regla.repite) "\n🔁 " + Recurrencia.texto(e.regla, e.momento, e.ocurrencias) else ""
         e.cerrado -> "Cerrado · era para el ${Tiempo.completo(e.momento)}"
         else -> "Vencido el ${Tiempo.completo(e.momento)}"
+    }
+
+    private fun abrirEnvio(id: Int) =
+        startActivity(Intent(this, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, id))
+
+    /** "Enviar ahora" en un envío que se repite: separa la próxima vez (queda en vencidos) y la abre para enviar. */
+    private fun adelantarVez(e: Envio) {
+        val sig = if (e.regla.limite in 1..e.ocurrencias + 1) null
+                  else Recurrencia.siguiente(e.regla, e.momento, maxOf(System.currentTimeMillis(), e.momento))
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Enviar ahora")
+            .setMessage("Este envío se repite. Se adelanta la vez del ${Tiempo.completo(e.momento)}: queda aparte, " +
+                "en «Ya vencidos», para enviarla ahora, y " +
+                (if (sig == null) "como era la última vez, el envío ya no se repite."
+                 else "el envío sigue programado para el ${Tiempo.completo(sig)}."))
+            .setPositiveButton("Enviar ahora") { _, _ ->
+                val actual = Envios.obtener(this, e.id)?.takeIf { it.repite } ?: return@setPositiveButton
+                abrirEnvio(separarVez(this, actual).id)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     /** Tarjeta de un envío: toque = editar; mantener presionado = borrar. */
@@ -158,9 +181,7 @@ class MainActivity : Activity() {
                 if (e.paraEnviar) RN.style.Boton_Principal else RN.style.Boton).apply {
                 val n = if (e.pendientes.size > 1) " (${e.pendientes.size} pendientes)" else ""
                 text = (if (e.paraEnviar) "Enviar" else "Enviar ahora") + n
-                setOnClickListener {
-                    startActivity(Intent(this@MainActivity, EnviarActivity::class.java).putExtra(Programador.EXTRA_ID, e.id))
-                }
+                setOnClickListener { if (e.repite) adelantarVez(e) else abrirEnvio(e.id) }
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
             setOnClickListener {

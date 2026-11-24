@@ -8,16 +8,24 @@ import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.view.MenuItem
+import android.view.Gravity
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import com.mis.nucleo.Ajustes
 import com.mis.nucleo.Programador
+import com.mis.nucleo.Recurrencia
+import com.mis.nucleo.Regla
+import com.mis.nucleo.Repeticion
 import com.mis.nucleo.Registro
 import com.mis.nucleo.Tiempo
 import java.time.LocalDate
@@ -47,6 +55,18 @@ class EditarActivity : Activity() {
     private lateinit var txtVista: TextView
     private var ultimoCampo: EditText? = null                  // campo de texto donde se inserta la variable
 
+    // Repetición (igual que Recordatorios)
+    private lateinit var spRep: Spinner
+    private lateinit var filaDias: LinearLayout
+    private val checks = mutableListOf<CheckBox>()
+    private lateinit var spOrdinal: Spinner
+    private lateinit var spDiaSemana: Spinner
+    private lateinit var filaNSemana: LinearLayout
+    private lateinit var spTerminar: Spinner
+    private lateinit var edVeces: EditText
+    private lateinit var filaTerminar: LinearLayout
+    private lateinit var txtRep: TextView
+
     override fun onCreate(estado: Bundle?) {
         super.onCreate(estado)
         setContentView(R.layout.activity_editar)
@@ -61,6 +81,7 @@ class EditarActivity : Activity() {
         findViewById<Button>(R.id.btnVariable).setOnClickListener { elegirVariable() }
         findViewById<Button>(R.id.btnUsarPlantilla).setOnClickListener { usarPlantilla() }
         findViewById<Button>(R.id.btnGuardarPlantilla).setOnClickListener { guardarComoPlantilla() }
+        armarRepeticion()
 
         original = Envios.obtener(this, intent.getIntExtra(Programador.EXTRA_ID, -1))
         val e = original
@@ -74,6 +95,7 @@ class EditarActivity : Activity() {
             fecha = z.toLocalDate()
             hora = z.toLocalTime().withSecond(0).withNano(0)
             swAlarma.isChecked = e.alarma
+            mostrarRegla(e.regla)
             findViewById<TextView>(R.id.estadoEnvio).apply {
                 val t = estadoParaEditar(e)
                 visibility = if (t == null) View.GONE else View.VISIBLE
@@ -89,6 +111,8 @@ class EditarActivity : Activity() {
             fecha = prox.toLocalDate()
             hora = prox.toLocalTime()
             swAlarma.isChecked = Ajustes.alarmaPorDefecto(this)
+            spOrdinal.setSelection(((fecha.dayOfMonth - 1) / 7).coerceAtMost(3))
+            spDiaSemana.setSelection(fecha.dayOfWeek.value - 1)
             // Envío nuevo: arranca con el grupo Default de contactos.
             seleccion += Contactos.defaults(this).map { it.id }
         }
@@ -113,6 +137,77 @@ class EditarActivity : Activity() {
         mostrarContactos()
         mostrarModo()
         mostrarFechaHora()
+        actualizarRepeticion()
+    }
+
+    private fun spinner(opciones: List<String>) = Spinner(this).apply {
+        adapter = ArrayAdapter(this@EditarActivity, android.R.layout.simple_spinner_dropdown_item, opciones)
+    }
+
+    private fun alElegir(sp: Spinner, accion: (Int) -> Unit) {
+        sp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = accion(pos)
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
+    }
+
+    /** Controles de repetición: tipo, días de la semana, "el n.º día del mes" y "terminar después de X veces". */
+    private fun armarRepeticion() {
+        spRep = findViewById(R.id.spRepeticion)
+        filaDias = findViewById(R.id.filaDias)
+        txtRep = findViewById(R.id.txtRepeticion)
+        Recurrencia.LETRAS_DIAS.forEachIndexed { i, letra ->
+            val cb = CheckBox(this).apply { text = letra; tag = i + 1 }
+            filaDias.addView(cb, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            checks.add(cb)
+        }
+        spOrdinal = spinner(Recurrencia.ORDINALES)
+        spDiaSemana = spinner(Recurrencia.DIAS_SEMANA)
+        filaNSemana = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@EditarActivity).apply { text = "El"; setTextColor(getColor(RN.color.texto)) })
+            addView(spOrdinal, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(spDiaSemana, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f))
+        }
+        spTerminar = spinner(listOf("Nunca", "Después de X veces"))
+        edVeces = EditText(this).apply { hint = "X"; inputType = InputType.TYPE_CLASS_NUMBER; visibility = View.GONE }
+        filaTerminar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@EditarActivity).apply { text = "Terminar:"; setTextColor(getColor(RN.color.texto)) })
+            addView(spTerminar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f))
+            addView(edVeces, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        findViewById<LinearLayout>(R.id.filaExtra).apply { addView(filaNSemana); addView(filaTerminar) }
+        alElegir(spTerminar) { pos -> edVeces.visibility = if (pos == 1) View.VISIBLE else View.GONE }
+        spRep.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+            Repeticion.entries.map { it.etiqueta })
+        alElegir(spRep) { actualizarRepeticion() }
+    }
+
+    private fun mostrarRegla(r: Regla) {
+        spRep.setSelection(r.tipo.ordinal)
+        checks.forEach { it.isChecked = (it.tag as Int) in r.dias }
+        spOrdinal.setSelection((r.semanaMes - 1).coerceIn(0, 4))
+        spDiaSemana.setSelection((r.diaSemana - 1).coerceIn(0, 6))
+        if (r.limite > 0) { spTerminar.setSelection(1); edVeces.setText(r.limite.toString()) }
+    }
+
+    private fun repeticionElegida() = Repeticion.entries[spRep.selectedItemPosition]
+
+    private fun actualizarRepeticion() {
+        val rep = repeticionElegida()
+        val semanal = rep == Repeticion.SEMANAL
+        filaDias.visibility = if (semanal) View.VISIBLE else View.GONE
+        if (semanal && checks.none { it.isChecked }) checks[fecha.dayOfWeek.value - 1].isChecked = true
+        filaNSemana.visibility = if (rep == Repeticion.NSEMANA) View.VISIBLE else View.GONE
+        filaTerminar.visibility = if (rep == Repeticion.NINGUNA) View.GONE else View.VISIBLE
+        val o = original
+        txtRep.visibility = if (rep == Repeticion.NINGUNA) View.GONE else View.VISIBLE
+        txtRep.text = "Cada vez que llega la fecha, esa vez queda aparte en «Ya vencidos» para enviarla, " +
+            "y este envío sigue programado para la próxima." +
+            if (o != null && o.repite && o.regla.limite > 0) "\nYa ocurrió ${o.ocurrencias} de ${o.regla.limite} veces." else ""
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -123,6 +218,9 @@ class EditarActivity : Activity() {
     private fun estadoParaEditar(e: Envio): String? = when {
         e.pospuestoHasta > 0 -> "Está pospuesto hasta el ${Tiempo.completo(e.pospuestoHasta)}. Al guardar se cancela " +
             "la posposición y queda programado para la fecha y hora de abajo."
+        e.origen > 0 && !e.activo -> "Es una vez (la del ${Tiempo.completo(e.momento)}) de un envío que se repite. " +
+            "Los cambios acá no cambian el envío que se repite." +
+            if (e.cerrado) " Ya se cerró: al guardar con una fecha futura se vuelve a programar." else ""
         e.cerrado -> "Este envío ya se cerró. Al guardar con una fecha futura se vuelve a programar."
         !e.activo -> "Este envío ya venció. Al guardar con una fecha futura se vuelve a programar."
         else -> null
@@ -313,8 +411,28 @@ class EditarActivity : Activity() {
                 return
             }
         }
-        val momento = ZonedDateTime.of(fecha, hora, ZoneId.systemDefault()).toInstant().toEpochMilli()
-        if (momento <= System.currentTimeMillis()) { avisar("Esa fecha y hora ya pasaron. Elegí un momento futuro."); return }
+        val tipo = repeticionElegida()
+        val dias = checks.filter { it.isChecked }.map { it.tag as Int }.toSet()
+        if (tipo == Repeticion.SEMANAL && dias.isEmpty()) { avisar("Elegí al menos un día de la semana"); return }
+        var limite = 0
+        if (tipo != Repeticion.NINGUNA && spTerminar.selectedItemPosition == 1) {
+            limite = edVeces.text.toString().toIntOrNull() ?: 0
+            if (limite < 1) { avisar("Indicá después de cuántas veces termina"); return }
+        }
+        val regla = Regla(tipo = tipo, dias = if (tipo == Repeticion.SEMANAL) dias else emptySet(),
+            diaMes = fecha.dayOfMonth, semanaMes = spOrdinal.selectedItemPosition + 1,
+            diaSemana = spDiaSemana.selectedItemPosition + 1, limite = limite)
+        val ahora = System.currentTimeMillis()
+        val elegido = ZonedDateTime.of(fecha, hora, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        if (!regla.repite && elegido <= ahora) { avisar("Esa fecha y hora ya pasaron. Elegí un momento futuro."); return }
+        // Con repetición: la primera vez válida (día elegido y en el futuro), como Recordatorios.
+        val momento = Recurrencia.ajustarInicio(regla, elegido, ahora)
+        val o = original
+        // Si sigue repitiéndose, se conserva cuántas veces ya ocurrió; si se reactiva un vencido, vuelve a cero.
+        val ocurrencias = if (o != null && o.repite && regla.repite) o.ocurrencias else 0
+        if (regla.limite in 1..ocurrencias) {
+            avisar("Ya ocurrió $ocurrencias veces: indicá un límite mayor o «Nunca»"); return
+        }
 
         val id = original?.id ?: Envios.nuevoId(this)
         // Se conservan las marcas de "enviado" (para reprogramar solo los pendientes), salvo que ya se
@@ -331,14 +449,17 @@ class EditarActivity : Activity() {
             },
             momento = momento,
             alarma = swAlarma.isChecked,
-            whatsapp = original?.whatsapp ?: ""
+            whatsapp = original?.whatsapp ?: "",
+            regla = regla,
+            ocurrencias = ocurrencias,
+            origen = original?.origen ?: 0
         )
         // Cancela alarmas, posposición y notificación anteriores; después programa la nueva fecha.
         Programador.quitar(this, id)
         Envios.guardar(this, e)
         Registro.anotar(this, "#$id envío ${if (original == null) "creado" else "editado"}")
         Programador.programar(this, ManejadorMensajes.comoAviso(this, e))
-        avisar("Programado para el ${Tiempo.completo(momento)}")
+        avisar("Programado para el ${Tiempo.completo(momento)}" + if (regla.repite) " (se repite)" else "")
         finish()
     }
 

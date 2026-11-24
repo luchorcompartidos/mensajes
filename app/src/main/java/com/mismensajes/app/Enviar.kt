@@ -15,6 +15,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.mis.nucleo.Notificador
 import com.mis.nucleo.Programador
+import com.mis.nucleo.Recurrencia
+import com.mis.nucleo.Regla
 import com.mis.nucleo.Registro
 import com.mis.nucleo.Tiempo
 import com.mis.nucleo.R as RN
@@ -76,6 +78,36 @@ fun cerrarEnvio(ctx: Context, id: Int, motivo: String) {
     Programador.quitar(ctx, id)
     Envios.obtener(ctx, id)?.let { Envios.guardar(ctx, it.copy(activo = false, cerrado = true, pospuestoHasta = 0)) }
     Registro.anotar(ctx, "#$id envío cerrado ($motivo)")
+}
+
+/**
+ * Envío que se repite: separa la vez actual (la de [Envio.momento]) para enviarla, como los "cumplidos"
+ * de Recordatorios. Se crea un envío aparte, vencido y sin repetición, con todos los contactos sin enviar
+ * ([Envio.origen] = el original), y el original sigue programado desde la próxima vez.
+ * Si era la última vez (límite de veces o sin próxima fecha), el propio original queda vencido.
+ * Deja las alarmas del original al día. Devuelve el envío de esa vez (el nuevo o el original).
+ */
+fun separarVez(ctx: Context, e: Envio): Envio {
+    val ahora = System.currentTimeMillis()
+    val veces = e.ocurrencias + 1
+    val siguiente = if (e.regla.limite in 1..veces) null
+                    else Recurrencia.siguiente(e.regla, e.momento, maxOf(ahora, e.momento))
+    val sinEnviar = e.destinos.map { it.copy(enviado = false) }
+    if (siguiente == null) {
+        val ultima = e.copy(activo = false, ocurrencias = veces, destinos = sinEnviar)
+        Envios.guardar(ctx, ultima)
+        Programador.cancelar(ctx, e.id, incluirPospuesto = false)
+        Registro.anotar(ctx, "#${e.id} última vez (${Tiempo.completo(e.momento)}): ya no se repite")
+        return ultima
+    }
+    val vez = e.copy(id = Envios.nuevoId(ctx), activo = false, cerrado = false, pospuestoHasta = 0,
+        destinos = sinEnviar, regla = Regla.NINGUNA, ocurrencias = 0, origen = e.id)
+    Envios.guardar(ctx, vez)
+    val sigue = e.copy(momento = siguiente, ocurrencias = veces)
+    Envios.guardar(ctx, sigue)
+    Registro.anotar(ctx, "#${e.id} vez del ${Tiempo.completo(e.momento)} separada como #${vez.id}")
+    Programador.programar(ctx, ManejadorMensajes.comoAviso(ctx, sigue))
+    return vez
 }
 
 /**

@@ -3,6 +3,7 @@ package com.mismensajes.app
 import android.content.Context
 import android.net.Uri
 import android.provider.ContactsContract
+import com.mis.nucleo.Regla
 import com.mis.nucleo.Registro
 import org.json.JSONArray
 import org.json.JSONObject
@@ -32,8 +33,14 @@ data class Envio(
     val activo: Boolean = true,         // false = ya venció (sonó)
     val cerrado: Boolean = false,       // true = se tocó "Hecho" después de vencer: sale del núcleo
     val pospuestoHasta: Long = 0,
-    val whatsapp: String = ""           // con qué WhatsApp se abre: "" = según Ajustes, o WhatsApp.COMUN/BUSINESS/PREGUNTAR
+    val whatsapp: String = "",          // con qué WhatsApp se abre: "" = según Ajustes, o WhatsApp.COMUN/BUSINESS/PREGUNTAR
+    val regla: Regla = Regla.NINGUNA,   // repetición (misma regla y claves que Recordatorios)
+    val ocurrencias: Int = 0,           // veces que ya llegó su fecha (para "terminar después de X veces")
+    val origen: Int = 0                 // > 0 = es una vez separada del envío que se repite con ese id
 ) {
+    /** Sigue programado y se repite. */
+    val repite: Boolean get() = activo && !cerrado && regla.repite
+
     /** Cuándo vuelve a sonar (la posposición, si hay); 0 = ya no suena. */
     val proxima: Long get() = if (pospuestoHasta > 0) pospuestoHasta else if (activo) momento else 0L
 
@@ -130,6 +137,8 @@ object Envios {
         return JSONObject().put("id", e.id).put("titulo", e.titulo).put("modo", e.modo.codigo).put("texto", e.texto)
             .put("dest", d).put("momento", e.momento).put("alarma", e.alarma).put("activo", e.activo)
             .put("cerrado", e.cerrado).put("posp", e.pospuestoHasta).put("wa", e.whatsapp)
+            .put("ocurr", e.ocurrencias).put("origen", e.origen)
+            .let { e.regla.ponerEn(it) }
     }
 
     private fun desdeJson(o: JSONObject): Envio {
@@ -143,7 +152,8 @@ object Envios {
             },
             momento = o.getLong("momento"), alarma = o.optBoolean("alarma", false),
             activo = o.optBoolean("activo", true), cerrado = o.optBoolean("cerrado", false),
-            pospuestoHasta = o.optLong("posp", 0), whatsapp = o.optString("wa")
+            pospuestoHasta = o.optLong("posp", 0), whatsapp = o.optString("wa"),
+            regla = Regla.desde(o), ocurrencias = o.optInt("ocurr", 0), origen = o.optInt("origen", 0)
         )
     }
 }
