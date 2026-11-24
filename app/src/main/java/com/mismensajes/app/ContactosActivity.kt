@@ -18,17 +18,33 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.mis.nucleo.R as RN
 
-/** Lista propia de contactos: se cargan escribiendo el número a mano y se valida en WhatsApp (como Recordatorios). */
+/**
+ * Lista propia de contactos: se cargan escribiendo el número a mano y se valida en WhatsApp (como Recordatorios).
+ * Abajo, las listas de contactos con nombre (ej. "Familia") para elegir varios de una vez en un envío.
+ */
 class ContactosActivity : Activity() {
     private lateinit var lista: LinearLayout
+    private lateinit var cajaListas: LinearLayout
 
     override fun onCreate(estado: Bundle?) {
         super.onCreate(estado)
-        title = "Contactos"
+        title = "Contactos y listas"
         actionBar?.setDisplayHomeAsUpEnabled(true)
         val dp = resources.displayMetrics.density
         val m = (24 * dp).toInt()
         lista = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        cajaListas = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val nuevaLista = Button(this, null, 0, RN.style.Boton_Principal).apply {
+            text = "Nueva lista"
+            setOnClickListener { editarLista(null) { armar() } }
+        }
+        val ayudaListas = TextView(this).apply {
+            text = "Grupos con nombre (ej. «Familia») para elegir varios contactos de una vez al armar un envío " +
+                "(botón «Usar lista»). Tocá una lista para editarla; mantenela presionada para borrarla."
+            textSize = 13f
+            setTextColor(getColor(RN.color.texto2))
+            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+        }
         val agregar = Button(this, null, 0, RN.style.Boton_Principal).apply {
             text = "Agregar contacto"
             setOnClickListener { editarContacto(null) { armar() } }
@@ -50,6 +66,11 @@ class ContactosActivity : Activity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT))
                 addView(ayuda)
                 addView(lista)
+                addView(subtitulo("Listas"))
+                addView(ayudaListas)
+                addView(nuevaLista, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT))
+                addView(cajaListas)
             })
         })
         armar()
@@ -61,6 +82,7 @@ class ContactosActivity : Activity() {
     }
 
     private fun armar() {
+        armarListas()
         lista.removeAllViews()
         val todos = Contactos.ordenados(this)
         if (todos.isEmpty()) {
@@ -87,6 +109,34 @@ class ContactosActivity : Activity() {
                     setPadding((4 * dp).toInt(), (6 * dp).toInt(), 0, (6 * dp).toInt())
                     setOnClickListener { editarContacto(Contactos.obtener(this@ContactosActivity, c.id)) { armar() } }
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
+        }
+    }
+
+    /** Listas de contactos: tocar = editar; mantener presionado = borrar. */
+    private fun armarListas() {
+        cajaListas.removeAllViews()
+        val todas = Listas.ordenadas(this)
+        val dp = resources.displayMetrics.density
+        if (todas.isEmpty()) {
+            cajaListas.addView(TextView(this).apply {
+                text = "Todavía no hay listas."
+                textSize = 15f
+                setPadding(0, (8 * dp).toInt(), 0, 0)
+            })
+            return
+        }
+        todas.forEach { l ->
+            cajaListas.addView(TextView(this).apply {
+                text = "${l.etiqueta} (${Listas.contactosDe(this@ContactosActivity, l).size})\n" +
+                    Listas.nombres(this@ContactosActivity, l)
+                textSize = 15f
+                setTextColor(getColor(RN.color.texto))
+                setBackgroundResource(RN.drawable.campo)
+                setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
+                setOnClickListener { Listas.obtener(this@ContactosActivity, l.id)?.let { editarLista(it) { armar() } } }
+                setOnLongClickListener { confirmarBorrarLista(l) { armar() }; true }
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
         }
@@ -153,12 +203,15 @@ fun Activity.editarContacto(actual: Contacto?, alGuardar: (Contacto?) -> Unit) {
         .setNegativeButton("Cancelar", null)
     if (actual != null) b.setNeutralButton("Borrar") { _, _ ->
         val usos = Envios.usosDe(this, actual.id)
+        val enListas = Listas.usosDe(this, actual.id)
         AlertDialog.Builder(this, temaDialogo())
             .setTitle("Borrar contacto")
             .setMessage("¿Eliminar definitivamente a «${actual.etiqueta}» (${actual.numero})?" +
-                if (usos > 0) " Se quita de $usos envío(s) programado(s)." else "")
+                (if (usos > 0) " Se quita de $usos envío(s) programado(s)." else "") +
+                (if (enListas > 0) " Se quita de $enListas lista(s)." else ""))
             .setPositiveButton("Eliminar") { _, _ ->
                 Envios.quitarContacto(this, actual.id)
+                Listas.quitarContacto(this, actual.id)
                 Contactos.borrar(this, actual.id)
                 avisar("Contacto eliminado")
                 alGuardar(null)

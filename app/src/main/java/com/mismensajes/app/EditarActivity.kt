@@ -100,6 +100,11 @@ class EditarActivity : Activity() {
             guardarCamposTexto()
             elegirContactos(seleccion) { mostrarContactos(); mostrarModo() }
         }
+        findViewById<Button>(R.id.btnUsarLista).setOnClickListener {
+            guardarCamposTexto()
+            usarLista(seleccion) { mostrarContactos(); mostrarModo() }
+        }
+        findViewById<Button>(R.id.btnGuardarLista).setOnClickListener { guardarComoLista(seleccion) }
         findViewById<Button>(R.id.btnFecha).setOnClickListener { elegirFecha() }
         findViewById<Button>(R.id.btnHora).setOnClickListener {
             elegirHora(hora) { t -> hora = t; mostrarFechaHora() }
