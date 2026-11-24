@@ -21,6 +21,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:minHeight="40dp"
+                android:gravity="center_vertical"
                 android:textColor="@color/texto3"
                 android:textSize="13sp" />
 
@@ -45,6 +47,19 @@
             android:padding="12dp"
             android:textColor="@color/aviso_texto"
             android:textSize="14sp"
+            android:visibility="gone" />
+
+        <!-- "Hay una versión nueva": al tocarla abre el diálogo con la descarga del instalador. -->
+        <TextView
+            android:id="@+id/avisoVersion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/boton_principal"
+            android:padding="12dp"
+            android:textColor="@color/sobre_acento"
+            android:textSize="15sp"
+            android:textStyle="bold"
             android:visibility="gone" />
 
         <LinearLayout

@@ -11,12 +11,15 @@ import com.mis.nucleo.Notificador
 import com.mis.nucleo.Nucleo
 import com.mis.nucleo.Programador
 import com.mis.nucleo.Tiempo
+import com.mis.nucleo.VersionGitHub
 
 /** Se crea antes que cualquier pantalla o receiver: deja configurado el núcleo. */
 class AppMensajes : Application() {
     override fun onCreate() {
         super.onCreate()
         Nucleo.configurar(ManejadorMensajes)
+        VersionGitHub.repo = "luchorcompartidos/mensajes"
+        VersionGitHub.apkFijo = "programador-mensajes.apk"
         Notificador.crearCanales(this)
         quitarPruebaVieja()
     }

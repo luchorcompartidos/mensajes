@@ -13,12 +13,14 @@ import android.widget.Switch
 import android.widget.TextView
 import com.mis.nucleo.Ajustes
 import com.mis.nucleo.Notificador
+import com.mis.nucleo.Nucleo
+import com.mis.nucleo.VersionGitHub
 import com.mis.nucleo.Posposicion
 import com.mis.nucleo.R as RN
 
 /**
  * Ajustes de la app: con qué WhatsApp se abren los envíos (común, Business o preguntar cada vez; cada envío
- * puede cambiarlo desde su pantalla de envío), el botón de posponer rápido y si los envíos nuevos suenan como alarma.
+ * puede cambiarlo desde su pantalla de envío), el botón de posponer rápido, si los envíos nuevos suenan como alarma y "Acerca de" (versión y Changelog).
  * Estos dos últimos se guardan en el núcleo (preferencias "ajustes", mismas claves que Recordatorios).
  */
 class AjustesActivity : Activity() {
@@ -76,6 +78,44 @@ class AjustesActivity : Activity() {
             setOnCheckedChangeListener { _, valor -> Ajustes.guardarAlarmaPorDefecto(this@AjustesActivity, valor) }
         })
         caja.addView(nota("Es lo que viene marcado al crear un envío; en cada envío se puede cambiar."))
+
+        caja.addView(subtitulo("Acerca de"))
+        val estadoVersion = nota("")
+        fun refrescarVersion() {
+            val n = VersionGitHub.nueva(this)
+            val ult = VersionGitHub.guardadas(this).firstOrNull()
+            estadoVersion.text = "Versión instalada: ${VersionGitHub.instalada(this)} · núcleo ${Nucleo.VERSION}" + when {
+                n != null -> "\nHay una versión nueva: ${n.tag} (${VersionGitHub.fecha(n.fecha)})"
+                ult != null -> "\nÚltima publicada: ${ult.tag} (${VersionGitHub.fecha(ult.fecha)})"
+                else -> ""
+            }
+        }
+        refrescarVersion()
+        VersionGitHub.consultar(this) { if (!isFinishing) refrescarVersion() }
+        caja.addView(estadoVersion)
+        caja.addView(Button(this).apply {
+            isAllCaps = false
+            text = "Versión y actualizaciones"
+            setOnClickListener {
+                VersionGitHub.consultar(this@AjustesActivity, forzar = true) {
+                    if (!isFinishing) { refrescarVersion(); VersionGitHub.dialogo(this@AjustesActivity, temaDialogo()) }
+                }
+            }
+        })
+        caja.addView(Button(this).apply {
+            isAllCaps = false
+            text = "Ver cambios (Changelog)"
+            setOnClickListener {
+                VersionGitHub.consultar(this@AjustesActivity, forzar = true) {
+                    if (!isFinishing) { refrescarVersion(); VersionGitHub.changelog(this@AjustesActivity, temaDialogo()) }
+                }
+            }
+        })
+        caja.addView(Button(this).apply {
+            isAllCaps = false
+            text = "Descargar instalador de la última versión"
+            setOnClickListener { VersionGitHub.descargar(this@AjustesActivity, VersionGitHub.guardadas(this@AjustesActivity).firstOrNull()) }
+        })
 
         setContentView(ScrollView(this).apply { fitsSystemWindows = true; addView(caja) })
     }

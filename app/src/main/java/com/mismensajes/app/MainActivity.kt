@@ -17,6 +17,7 @@ import com.mis.nucleo.Permisos
 import com.mis.nucleo.Programador
 import com.mis.nucleo.Registro
 import com.mis.nucleo.Tiempo
+import com.mis.nucleo.VersionGitHub
 import com.mis.nucleo.R as RN
 
 /** Pantalla principal: envíos programados (por próxima fecha) y ya vencidos. */
@@ -26,8 +27,10 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        findViewById<TextView>(R.id.version).text =
-            "v${Nucleo.versionApp(this)} · núcleo ${Nucleo.VERSION}"
+        // Tocar la versión: fecha de la Release, aviso de versión nueva y Changelog.
+        findViewById<TextView>(R.id.version).setOnClickListener {
+            VersionGitHub.consultar(this, forzar = true) { if (!isFinishing) { mostrarVersion(); VersionGitHub.dialogo(this, temaDialogo()) } }
+        }
         findViewById<Button>(R.id.btnNuevo).setOnClickListener {
             startActivity(Intent(this, EditarActivity::class.java))
         }
@@ -51,6 +54,21 @@ class MainActivity : Activity() {
         // Si la app se detuvo a la fuerza, Android borra sus alarmas: al abrirla se vuelven a programar.
         Programador.reprogramarTodos(this, margenMs = 2 * 60_000L, registrar = false)
         actualizar()
+        mostrarVersion()
+        VersionGitHub.consultar(this) { if (!isFinishing) mostrarVersion() }
+    }
+
+    /** Encabezado con la versión y franja "Hay una versión nueva" (con la última consulta guardada). */
+    private fun mostrarVersion() {
+        val n = VersionGitHub.nueva(this)
+        findViewById<TextView>(R.id.version).text =
+            "v${Nucleo.versionApp(this)} · núcleo ${Nucleo.VERSION}" + if (n != null) " · nueva: ${n.tag}" else " ⓘ"
+        findViewById<TextView>(R.id.avisoVersion).apply {
+            if (n == null) { visibility = View.GONE; return }
+            text = "Hay una versión nueva (${n.tag}). Tocá acá para descargar el instalador."
+            visibility = View.VISIBLE
+            setOnClickListener { VersionGitHub.dialogo(this@MainActivity, temaDialogo()) }
+        }
     }
 
     override fun onRequestPermissionsResult(codigo: Int, permisos: Array<out String>, resultados: IntArray) {
