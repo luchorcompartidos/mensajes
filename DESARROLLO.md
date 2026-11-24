@@ -24,13 +24,13 @@
 - "Enviar ahora" en un envío que se repite pide confirmación y adelanta la próxima vez (la separa y la abre para enviar).
 - La lista muestra 🔁 y la regla (con "N/L veces" si tiene límite).
 - **A probar en el celular:** v0.0.11 + lo pendiente de la v0.0.5 a v0.0.10.
-- En curso: definiciones de Google Sheets y SMS → propuesta en `DEFINICIONES.md`, **a confirmar**.
+- En curso: —. Definiciones de Google Sheets y SMS **confirmadas** en `DEFINICIONES.md`; próxima etapa: **0.12**.
 
 ## 3. Próximos pasos
 1. **Probar la v0.0.11** (incluye lo de la v0.0.5 a v0.0.10) en el celular y corregir lo que aparezca.
-2. **Etapa aparte — Migrar Recordatorios** al núcleo `nucleo-android` (submódulo); de paso alinear `WhatsApp.abrir` con `EnviarWhatsappActivity`.
-3. **Confirmar las definiciones** de `DEFINICIONES.md` (Google Sheets y SMS; ver su sección D) y el orden de etapas propuesto (0.12 importar contactos, 0.13 SMS, 0.14 importar envíos).
-4. A definir: grupo Default como lista (ver sección 5).
+2. **Etapa 0.12 — Importar y exportar contactos (CSV)**, según `DEFINICIONES.md` A.1, A.2 y A.4.
+3. **0.13 — Importar envíos (CSV)** (A.3) y **0.14 — SMS** (B).
+4. Migrar Recordatorios al núcleo: por ahora no (decisión 24-11). A definir: grupo Default como lista.
 
 ## 4. Decisiones tomadas
 - 2026-11-23 App separada de Recordatorios (no pantalla nueva dentro de ella): escalabilidad y funciones futuras propias de mensajería.
@@ -62,15 +62,16 @@
 - 2026-11-23 Núcleo en su repo `nucleo-android`, como submódulo `nucleo/`. Cambios del núcleo se hacen en ese repo y acá se actualiza el submódulo (ver README del núcleo). Mover el núcleo no genera Release (el APK no cambia).
 - 2026-11-24 Listas de contactos: se gestionan en la pantalla de Contactos (no pantalla aparte); guardan ids de contactos (prefs "listas"); al usarlas, los contactos se **copian** al envío (cambiar la lista no cambia envíos ya creados). El grupo Default sigue aparte, como en Recordatorios. Nombre obligatorio y sin repetir.
 - 2026-11-24 Repetición: la regla y el cálculo van al núcleo (`Regla`/`Recurrencia`, mismos códigos y claves que Recordatorios). Cada vez se **separa** en un envío aparte (`origen` = id del que se repite), como los "cumplidos" de Recordatorios: así cada vez tiene sus propias marcas de enviado, su notificación y su posposición. Si el celular estuvo apagado y se perdieron varias veces, se separa una sola y se sigue desde la próxima futura.
+- 2026-11-24 Google Sheets: **solo archivo CSV** (sin link publicado, por privacidad). Orden: contactos (importar + exportar) → envíos → SMS. Duplicados por número: se actualiza el nombre solo en la app (no agenda ni WhatsApp). Detalle en `DEFINICIONES.md`.
+- 2026-11-24 SMS: modo **por contacto** (WhatsApp/SMS/Ambos, como Recordatorios), ajustable por destinatario **solo para cada envío**; por defecto **"Preguntar antes"** (automático opcional, con control de tamaño al guardar); largo y costo **igual que Recordatorios** (funciones llevadas al núcleo `Sms.kt`) + contador corto en el editor.
+- 2026-11-24 Migración de Recordatorios al núcleo: por ahora no.
 - 2026-11-23 "Usar plantilla" / "Guardar como plantilla" trabajan sobre el último campo de texto tocado (igual que "Insertar variable"); "Agregar" va al final, en renglón nuevo; no se guardan dos plantillas con el mismo texto.
 
 ## 5. Pendientes / dudas abiertas
 - [ ] Probar en el celular la v0.0.11 (incluye lo de la v0.0.5 a v0.0.10; ver sección 2).
-- [ ] ¿Más variables a futuro? → propuesta en `DEFINICIONES.md` (A.3, columnas extra de la planilla).
+- [ ] Futuro: columnas extra de la planilla como variables por contacto (`DEFINICIONES.md` A.4).
 - [ ] ¿Pasar `Contactos`/`Agenda` y las pantallas al núcleo cuando se migre Recordatorios?
-- [ ] Cargar el link fijo en la planilla de Mi Panel.
 - [ ] ¿Pasar el grupo Default a ser una lista más?
-- [ ] Confirmar `DEFINICIONES.md`: importar desde Google Sheets (CSV por archivo y/o link publicado) y SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`, envío en el núcleo).
 
 ## 6. Datos técnicos clave
 - Definiciones de funciones grandes: `DEFINICIONES.md`. Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio` —con `regla`, `ocurrencias`, `origen`—, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `separarVez`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`), `Listas.kt` (`Lista`, `Listas` —prefs "listas"—, `editarLista`, `usarLista`, `guardarComoLista`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva), `Repeticion.kt` (`Repeticion`, `Regla`, `Recurrencia`); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
@@ -94,7 +95,7 @@
 - 2026-11-23: Etapa 0.9: núcleo movido a `luchorcompartidos/nucleo-android` (submódulo `nucleo/`, `submodules: true` en Actions) → sin Release (compilación de prueba, OK).
 - 2026-11-24: Etapa 0.10: listas de contactos (ABM en Contactos, "Usar lista" / "Guardar como lista" en el envío) → Release **v0.0.10** (patch).
 - 2026-11-24: Etapa 0.11: repetición de envíos (regla en el núcleo 0.6.0, cada vez separada en un envío aparte, "Enviar ahora" adelanta la vez) → Release **v0.0.11** (patch).
-- 2026-11-24: Definiciones propuestas de Google Sheets y SMS automático en `DEFINICIONES.md` (a confirmar) → sin Release (solo documentación).
+- 2026-11-24: Definiciones de Google Sheets (CSV) y SMS en `DEFINICIONES.md`, propuestas y confirmadas → sin Release (solo documentación).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*

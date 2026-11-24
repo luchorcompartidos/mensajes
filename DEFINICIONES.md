@@ -1,85 +1,81 @@
 # DEFINICIONES — Programador de Mensajes
 
-> Propuestas de funciones grandes antes de programarlas. Cuando una se confirma, la decisión pasa a
-> `DESARROLLO.md` (sección 4) y acá queda solo como referencia.
-> Estado: **propuesta, a confirmar** (24-11-2026).
+> Definiciones de funciones grandes antes de programarlas. Las decisiones resumidas están en
+> `DESARROLLO.md` (sección 4); acá queda el detalle para implementar.
+> Estado: **confirmadas** (24-11-2026).
 
 ---
 
-## A. Importar desde Google Sheets
+## A. Importar / exportar con Google Sheets (CSV)
 
-### A.1 Objetivo
-Cargar de una vez muchos contactos (y más adelante envíos) desde una planilla, en lugar de escribirlos de a uno.
+### A.1 Fuente: solo archivo CSV (por privacidad)
+- En Sheets: *Archivo > Descargar > CSV*. En la app: "Importar…" → selector de archivos de Android.
+- **No** se usa link publicado (los números quedarían públicos). Sin internet, sin login. Sirve también con Excel.
+- Futuro posible (no ahora): Apps Script para sincronizar. Descartado: API de Google con login.
 
-### A.2 Cómo se lee la planilla (opciones)
-| Opción | Cómo funciona | A favor | En contra |
-|---|---|---|---|
-| **1. Archivo CSV** | En Sheets: *Archivo > Descargar > CSV*; en la app: "Importar…" y se elige el archivo (selector de Android). | Privado, sin internet, sin configurar nada. Sirve también con Excel. | Hay que descargar el archivo cada vez. |
-| **2. Link CSV publicado** | En Sheets: *Archivo > Compartir > Publicar en la web > CSV* (como Mi Panel); el link se pega una vez en Ajustes y la app lo lee con "Importar desde la planilla". | Cómodo: se edita la planilla y se vuelve a importar. Usa `INTERNET`, que ya está. | **Los números quedan públicos** para cualquiera que tenga el link. |
-| 3. Apps Script | Un script en la planilla devuelve los datos (con una clave en el link) y podría recibir marcas de "enviado". | Privado y permite escribir de vuelta en la planilla. | Hay que instalar el script en cada planilla; más trabajo. |
-| 4. API de Google con login | Login con la cuenta de Google y lectura directa. | Lo más "integrado". | Proyecto en Google Cloud, firma SHA-1, librerías externas (hoy el proyecto no usa ninguna). No conviene. |
+### A.2 Contactos (etapa 0.12) — pantalla Contactos, menú "Importar…" / "Exportar…"
+| Columna | Obligatoria | Uso |
+|---|---|---|
+| `numero` | sí | Se normaliza como hoy (`numeroWhatsapp`, 549…). |
+| `nombre` | no | Si falta, se muestra el número. |
+| `lista` | no | Una o varias separadas por `,`; se crean las que no existan y se agrega el contacto. |
+| `default` | no | "sí" = grupo Default. |
+| `modo` | no | Se suma en la etapa SMS: WhatsApp / SMS / Ambos. |
+- **Duplicados** (mismo número normalizado): se **actualiza el nombre** sin preguntar. Solo cambia la lista de contactos **de la app** (no la agenda de Android ni WhatsApp). Efecto: los envíos no enviados muestran y usan en `{nombre}` el nombre nuevo (los envíos guardan el contacto, no el nombre).
+- **Exportar contactos a CSV**: mismas columnas; el archivo se comparte o se guarda con el selector de Android (respaldo o para armar la planilla).
 
-**Propuesta:** opciones 1 y 2 con el mismo lector de CSV (el link es opcional, con aviso de que queda público). La 3 queda para el futuro, si se quiere sincronizar.
-
-### A.3 Qué se importa (por etapas)
-1. **Contactos** (primera etapa), en la pantalla de Contactos, menú "Importar…".
-   - Columnas: `nombre`, `numero` (obligatoria) y, opcional, `lista` (una o varias separadas por `,`: se crean las listas que no existan y se agregan los contactos).
-   - Columna opcional `default` (sí/no): lo marca en el grupo Default.
-2. **Envíos** (etapa posterior), en la pantalla principal, "Importar envíos".
-   - Una fila por contacto: `fecha`, `hora`, `numero` (o `nombre` de un contacto existente), `texto`, `titulo` (opcional).
-   - Las filas con el mismo `titulo` + `fecha` + `hora` se juntan en un solo envío; si los textos son distintos queda en modo "un texto por contacto".
-   - Los contactos que no existan se crean.
-3. **Variables desde la planilla** (más adelante): cada columna extra del contacto (ej. `deuda`, `turno`) se guarda con el contacto y se usa como `{deuda}`, `{turno}` en el texto. Responde la duda abierta "¿Más variables a futuro?".
+### A.3 Envíos (etapa 0.13) — pantalla principal, "Importar envíos"
+| titulo | fecha | hora | numero | texto |
+|---|---|---|---|---|
+| Recordatorio turno | 02/12/2026 | 18:30 | 3514445566 | Hola {nombre}, te recuerdo el turno |
+- Una fila por destinatario. Filas con mismo `titulo` + `fecha` + `hora` = un envío. Textos iguales → "mismo texto"; distintos → "un texto por contacto".
+- `numero` o `nombre` de un contacto existente; los números nuevos se crean como contactos.
+- Variables iguales que en la app. Columnas extra a definir en la etapa: `alarma`, `repeticion`.
 
 ### A.4 Reglas del lector
-- Primera fila = encabezados. Se aceptan con o sin mayúsculas/tildes (`Número` = `numero`), en cualquier orden; las columnas que no se conocen se ignoran (o se ofrecen como variables, etapa 3).
-- Separador `,` o `;` (Excel en Argentina usa `;`), detectado solo. Texto entre comillas con saltos de línea permitido.
-- Números: se normalizan igual que hoy (`numeroWhatsapp`, formato 549…); filas sin número válido se informan como error.
-- Fecha `dd/mm/aaaa` y hora `hh:mm` (24 h).
-- **Antes de importar se muestra un resumen**: "N nuevos, M ya existen, K con error" (con la lista de errores) y se confirma.
-- Duplicados: se reconoce el contacto por número normalizado. Propuesta: actualizar el nombre si en la planilla viene distinto (o preguntar una sola vez "actualizar / saltear").
-- Igual que plantillas y listas: lo importado se **copia**; no queda enlazado a la planilla. Volver a importar suma y actualiza, nunca borra.
-- Extra opcional: "Exportar contactos a CSV" (respaldo o para pasar a la planilla).
+- Primera fila = encabezados, sin importar mayúsculas, tildes ni orden; columnas desconocidas se ignoran.
+- Separador `,` o `;` detectado solo; comillas con comas y saltos de línea respetadas.
+- Fecha `dd/mm/aaaa`, hora `hh:mm` (24 h).
+- **Vista previa antes de importar**: "N nuevos · M ya existen (se actualiza el nombre) · K con error" + lista de errores por fila → Importar / Cancelar.
+- Lo importado se **copia** (no queda enlazado). Reimportar suma y actualiza, **nunca borra**.
+- Futuro: columnas extra como variables por contacto (`{turno}`, `{monto}`).
 
 ---
 
-## B. SMS automático
+## B. SMS (etapa 0.14)
 
-### B.1 Objetivo
-Que un envío pueda salir **por SMS sin tocar nada**: al llegar la hora, la app manda el SMS sola. Por WhatsApp eso no es posible sin accesibilidad; por SMS sí.
+### B.1 Canal: por contacto, como Recordatorios
+- Cada contacto tiene modo: **WhatsApp / SMS / Ambos** (los existentes quedan en WhatsApp).
+- **En cada envío**, cada destinatario arranca con el modo de su contacto y se puede cambiar **solo para ese envío** (solo WhatsApp / solo SMS / ambos) o quitarlo. No cambia el contacto ni otros envíos. (Recordatorios no tiene este ajuste por destinatario; alinear si se migra.)
 
-### B.2 Comportamiento propuesto
-- **Canal por envío:** en la edición, "Enviar por: WhatsApp / SMS". (Más adelante, opcional: "SMS a los que no tienen WhatsApp".)
-- **Modo SMS:**
-  - *Automático:* al llegar la hora se envía a todos; no suena alarma. Queda una notificación "SMS enviado a 3 de 3".
-  - *Preguntar antes:* notificación (o alarma) con botón "Enviar SMS", como hoy con WhatsApp; sirve para revisar antes.
-- **Marca de enviado:** a diferencia de WhatsApp, acá la app **sí sabe** si salió (confirmación de Android), así que marca cada contacto sola. Si falla (sin señal, sin saldo, modo avión) avisa "No se pudo enviar a X" con "Reintentar" y "Abrir app de SMS".
-- Variables, plantillas, listas, repetición y posponer funcionan igual que con WhatsApp.
-- **Interruptor general en Ajustes:** "Permitir SMS automático" (si está apagado, los envíos SMS pasan a "preguntar antes"). Más "Enviar SMS de prueba" a un número.
-- **Largo y costo:** contador en el editor ("2 SMS"). Ojo: con **á, í, ó, ú** (o emojis) cada SMS baja de 160 a 70 caracteres; la ñ y la é no afectan. Opción "Quitar tildes en SMS" para que salga más barato.
-- **Doble SIM:** primera versión con la SIM predeterminada para SMS; elegir SIM 1/SIM 2 queda para después (necesita un permiso más).
+### B.2 Modo de envío del SMS
+- Por defecto **"Preguntar antes"**: notificación/alarma con botón "Enviar SMS"; al tocarlo se mandan todos los SMS del envío.
+- Opcional **"Automático"**: al llegar la hora se mandan solos, sin alarma; notificación "SMS enviado a N de M".
+- Android confirma si cada SMS salió → la app **marca enviado sola**. Si falla: aviso con "Reintentar" y "Abrir app de SMS".
+- Variables, plantillas, listas, Default, repetición, posponer y "Enviar ahora": igual que WhatsApp.
 
-### B.3 Datos técnicos
-- Permiso `SEND_SMS` (se pide en el momento de usar SMS por primera vez). La app no está en Play Store, así que no aplica la restricción de Play para SMS. Si Android lo bloquea en una app instalada a mano, se habilita en *Info de la app > Permitir ajustes restringidos*.
-- Envío con `SmsManager.sendMultipartTextMessage` y `PendingIntent` de resultado → marca de enviado o aviso de error.
-- Base en Recordatorios (`SuspensionSms` / `enviarSmsPrueba`). **Propuesta:** el envío de SMS va al **núcleo** (`Sms.kt`, genérico), así Recordatorios lo reutiliza al migrar, como se hizo con la repetición.
-- `Envio` suma `canal` ("wa" / "sms") y `smsAuto` (sí/no); los envíos viejos quedan como WhatsApp.
+### B.3 Largo y costo: igual que Recordatorios
+Se llevan al núcleo (`Sms.kt`) las funciones de Recordatorios (`Envios.medir`, `descripcionTamanio`, `convertirGsm`, `caracteresUnicode`, `convertible`, `paraSms`, `controlarTamanioSms`, `editarSms`, `enviarSmsPrueba`), con el mismo comportamiento:
+- Cálculo oficial de Android (`SmsMessage.calculateLength`).
+- **En el editor**: línea corta siempre visible debajo del texto ("142 caracteres · 1 SMS"); al tocarla, o si se divide, el detalle de Recordatorios: "2 SMS · 95 caracteres · codificación Unicode (70 por SMS; 67 si se divide)" + "Fuerzan Unicode: á ó".
+- **"Convertir caracteres"** (solo los que fuerzan Unicode: tildes, comillas, guiones, "…", "→"…), visible solo si se divide y la conversión cambia algo; se aplica a ese envío.
+- Si se divide: "El SMS se dividiría en N partes" + destinatarios y SMS por cada uno → **Enviar igual / Editar SMS / No enviar SMS / Convertir caracteres**. Editar SMS: contador en vivo y "✓ entra en 1 SMS", solo para ese envío.
+- **Modo automático**: ese control se hace **al guardar el envío** (no hay nadie para responder a la hora del envío).
+- Ajustes: interruptor general de SMS y "Enviar SMS de prueba" (con confirmación de envío real y posible costo).
+
+### B.4 Datos técnicos
+- `SEND_SMS` se pide la primera vez que se usa SMS. Si Android lo bloquea (app instalada a mano): *Info de la app > Permitir ajustes restringidos*.
+- `SmsManager.sendMultipartTextMessage` con `PendingIntent` de resultado (Recordatorios hoy no usa resultado: en Mensajes sí, para la marca automática).
+- Datos: `Contacto` suma `modo`; `Destino` suma `canal` del envío; `Envio` suma `smsAuto`. Datos viejos = WhatsApp.
+- Primera versión con la SIM predeterminada; elegir SIM, después.
+- A probar: envío automático con pantalla apagada y ahorro de batería.
 
 ---
 
-## C. Orden propuesto de etapas
+## C. Orden de etapas
 1. Probar la v0.0.11 (pendiente).
-2. **0.12 — Importar contactos** desde CSV (archivo + link opcional).
-3. **0.13 — SMS** (núcleo `Sms.kt` + canal por envío + Ajustes).
-4. **0.14 — Importar envíos** desde CSV.
-5. Después: variables desde la planilla, Apps Script, elegir SIM.
-- La migración de Recordatorios al núcleo puede ir antes o después de esto (si va después, ya se lleva también `Sms.kt`).
-
-## D. A confirmar
-- [ ] Sheets: ¿opciones 1 y 2 (archivo + link publicado) o solo archivo por privacidad?
-- [ ] Sheets: ¿empezar por contactos (+ listas) y dejar envíos para después?
-- [ ] Sheets: duplicados → ¿actualizar nombre o preguntar?
-- [ ] SMS: ¿modo por defecto automático o "preguntar antes"?
-- [ ] SMS: ¿canal por envío alcanza, o también "SMS a los que no tienen WhatsApp"?
-- [ ] SMS: ¿"Quitar tildes" activado por defecto?
-- [ ] ¿Qué va primero: Sheets, SMS o la migración de Recordatorios?
+2. **0.12** — Importar y exportar contactos (CSV).
+3. **0.13** — Importar envíos (CSV).
+4. **0.14** — SMS (núcleo `Sms.kt`, modo por contacto y por envío, largo y costo).
+5. Después: variables desde la planilla, elegir SIM, Apps Script.
+- Migración de Recordatorios al núcleo: **por ahora no**.
