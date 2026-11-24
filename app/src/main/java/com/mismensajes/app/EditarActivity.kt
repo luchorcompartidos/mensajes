@@ -1,5 +1,6 @@
 package com.mismensajes.app
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
@@ -37,6 +38,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import com.mis.nucleo.R as RN
 
+private const val PEDIDO_SMS = 6
+
 /** Alta y edición de un envío (recibe [Programador.EXTRA_ID] al editar). */
 class EditarActivity : Activity() {
     private var original: Envio? = null
@@ -58,6 +61,8 @@ class EditarActivity : Activity() {
     private lateinit var txtVista: TextView
     private lateinit var txtSms: TextView
     private var autoAbrir: Boolean? = null                     // apertura automática: null = según Ajustes
+    private var smsAuto = false                                // SMS: false = "Preguntar antes", true = "Automático"
+    private lateinit var btnSmsAuto: Button
     private var ultimoCampo: EditText? = null                  // campo de texto donde se inserta la variable
 
     // Repetición (igual que Recordatorios)
@@ -84,6 +89,8 @@ class EditarActivity : Activity() {
         txtVista = findViewById(R.id.txtVista)
         txtSms = findViewById(R.id.txtSms)
         txtSms.setOnClickListener { detalleSms = !detalleSms; actualizarSms() }
+        btnSmsAuto = findViewById(R.id.btnSmsAuto)
+        btnSmsAuto.setOnClickListener { elegirSmsAuto() }
         findViewById<TextView>(R.id.txtContactos).setOnClickListener { elegirCanal() }
         seguir(edTexto)
         findViewById<Button>(R.id.btnVariable).setOnClickListener { elegirVariable() }
@@ -105,6 +112,7 @@ class EditarActivity : Activity() {
             hora = z.toLocalTime().withSecond(0).withNano(0)
             swAlarma.isChecked = e.alarma
             autoAbrir = e.autoAbrir
+            smsAuto = e.smsAuto
             mostrarRegla(e.regla)
             findViewById<TextView>(R.id.estadoEnvio).apply {
                 val t = estadoParaEditar(e)
@@ -287,6 +295,7 @@ class EditarActivity : Activity() {
     private fun actualizarSms() {
         if (!::txtSms.isInitialized) return
         val conSms = seleccion.filter { canal(it).sms }
+        mostrarSmsAuto(conSms.isNotEmpty())
         if (conSms.isEmpty()) { txtSms.visibility = View.GONE; return }
         val campo = ultimoCampo ?: edTexto
         val contactoId = if (campo === edTexto) conSms.first()
@@ -476,6 +485,34 @@ class EditarActivity : Activity() {
             "Abrir WhatsApp automáticamente: " + AjustesApp.textoAutoAbrir(this, autoAbrir)
     }
 
+    private fun mostrarSmsAuto(visible: Boolean) {
+        btnSmsAuto.visibility = if (visible) View.VISIBLE else View.GONE
+        btnSmsAuto.text = "SMS: " + (if (smsAuto) "Automático (se mandan solos a la hora)" else "Preguntar antes (botón «Enviar SMS»)") +
+            if (!AjustesApp.smsActivo(this)) " · apagados en Ajustes" else ""
+    }
+
+    private fun elegirSmsAuto() {
+        val opciones = arrayOf("Preguntar antes: aviso con el botón «Enviar SMS»",
+            "Automático: a la hora se mandan solos, sin alarma (aviso «SMS enviado a N de M»)")
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("SMS de este envío")
+            .setSingleChoiceItems(opciones, if (smsAuto) 1 else 0) { d, i -> smsAuto = i == 1; mostrarSmsAuto(true); d.dismiss() }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private var sinPermisoSms = false   // ya se pidió el permiso de SMS al guardar y no se dio: se guarda igual
+
+    override fun onRequestPermissionsResult(pedido: Int, permisos: Array<out String>, resultados: IntArray) {
+        super.onRequestPermissionsResult(pedido, permisos, resultados)
+        if (pedido != PEDIDO_SMS) return
+        if (!Sms.permitido(this)) {
+            sinPermisoSms = true
+            avisar("Sin el permiso de SMS no se pueden mandar solos: a la hora del envío avisará con «Enviar SMS»")
+        }
+        guardar()
+    }
+
     private fun elegirAutoAbrir() {
         val valores = listOf(null, true, false)
         AlertDialog.Builder(this, temaDialogo())
@@ -541,14 +578,38 @@ class EditarActivity : Activity() {
             regla = regla,
             ocurrencias = ocurrencias,
             origen = original?.origen ?: 0,
-            autoAbrir = autoAbrir
+            autoAbrir = autoAbrir,
+            smsAuto = smsAuto
         )
+        // SMS automático: el permiso y el control "se dividiría en N partes" se hacen ahora,
+        // porque a la hora del envío no hay nadie para responder.
+        val conSms = e.destinos.filter { it.canal.sms && !it.smsEnviado }
+        if (e.smsAuto && conSms.isNotEmpty() && AjustesApp.smsActivo(this)) {
+            if (!Sms.permitido(this) && !sinPermisoSms) {
+                requestPermissions(arrayOf(Manifest.permission.SEND_SMS), PEDIDO_SMS)
+                return
+            }
+            controlarSms(e, conSms, Tiempo.zdt(momento)) { controlado, noEnviar ->
+                if (noEnviar.isEmpty()) programar(controlado)
+                else {
+                    avisar("Los SMS quedan en «Preguntar antes»: a la hora avisará con el botón «Enviar SMS»")
+                    programar(controlado.copy(smsAuto = false))
+                }
+            }
+            return
+        }
+        programar(e)
+    }
+
+    private fun programar(e: Envio) {
+        val id = e.id
+        val momento = e.momento
         // Cancela alarmas, posposición y notificación anteriores; después programa la nueva fecha.
         Programador.quitar(this, id)
         Envios.guardar(this, e)
         Registro.anotar(this, "#$id envío ${if (original == null) "creado" else "editado"}")
         Programador.programar(this, ManejadorMensajes.comoAviso(this, e))
-        avisar("Programado para el ${Tiempo.completo(momento)}" + if (regla.repite) " (se repite)" else "")
+        avisar("Programado para el ${Tiempo.completo(momento)}" + if (e.regla.repite) " (se repite)" else "")
         finish()
     }
 

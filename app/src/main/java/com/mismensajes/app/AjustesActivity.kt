@@ -1,10 +1,13 @@
 package com.mismensajes.app
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
 import android.view.MenuItem
 import android.widget.Button
+import android.widget.EditText
+import android.text.InputType
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -20,6 +23,7 @@ import com.mis.nucleo.Notificador
 import com.mis.nucleo.Nucleo
 import com.mis.nucleo.VersionGitHub
 import com.mis.nucleo.Posposicion
+import com.mis.nucleo.Sms
 import com.mis.nucleo.R as RN
 
 /**
@@ -27,8 +31,10 @@ import com.mis.nucleo.R as RN
  * puede cambiarlo desde su pantalla de envío), el botón de posponer rápido, si los envíos nuevos suenan como alarma y "Acerca de" (versión y Changelog).
  * Estos dos últimos se guardan en el núcleo (preferencias "ajustes", mismas claves que Recordatorios).
  * También la apertura automática de WhatsApp (encendida por defecto) con el estado del permiso
- * "Mostrar sobre otras apps" y un envío de prueba.
+ * "Mostrar sobre otras apps" y un envío de prueba. SMS: interruptor general y "Enviar SMS de prueba".
  */
+private const val PEDIDO_SMS = 7
+
 class AjustesActivity : Activity() {
     private var refrescarPermiso: () -> Unit = {}
 
@@ -108,6 +114,30 @@ class AjustesActivity : Activity() {
             isAllCaps = false
             text = "Probar apertura automática (envío de prueba en 1 minuto)"
             setOnClickListener { probarApertura() }
+        })
+
+        caja.addView(subtitulo("SMS"))
+        caja.addView(Switch(this).apply {
+            text = "Mandar SMS"
+            textSize = 15f
+            setTextColor(getColor(RN.color.texto))
+            minHeight = (48 * dp).toInt()
+            isChecked = AjustesApp.smsActivo(this@AjustesActivity)
+            setOnCheckedChangeListener { _, valor ->
+                AjustesApp.guardarSmsActivo(this@AjustesActivity, valor)
+                Registro.anotar(this@AjustesActivity, "SMS " + if (valor) "encendidos en Ajustes" else "apagados en Ajustes")
+                // Las notificaciones en la bandeja se redibujan (con o sin «Enviar SMS»).
+                Envios.todos(this@AjustesActivity).filter { !it.cerrado && it.usaSms && !Notificador.sonando(this@AjustesActivity, it.id) }
+                    .forEach { Notificador.actualizar(this@AjustesActivity, it.id) }
+            }
+        })
+        caja.addView(nota("Apagado: no se manda ningún SMS (ni con «Enviar SMS» ni automático) y los envíos se cierran " +
+            "solos cuando se envió todo por WhatsApp. Los contactos y envíos conservan su modo. " +
+            "Se usa la SIM predeterminada; cada SMS puede tener costo según tu plan."))
+        caja.addView(Button(this).apply {
+            isAllCaps = false
+            text = "Enviar SMS de prueba"
+            setOnClickListener { smsPrueba() }
         })
 
         caja.addView(subtitulo("Avisos"))
@@ -203,6 +233,42 @@ class AjustesActivity : Activity() {
                     .show()
             }
             .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** "Enviar SMS de prueba": pide el número, confirma que es un SMS real (con posible costo) y lo manda. */
+    private fun smsPrueba() {
+        if (!Sms.permitido(this)) { requestPermissions(arrayOf(Manifest.permission.SEND_SMS), PEDIDO_SMS); return }
+        val m = (20 * resources.displayMetrics.density).toInt()
+        val campo = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_PHONE
+            hint = "Número (ej. 1123456789)"
+            setText(AjustesApp.numeroPrueba(this@AjustesActivity))
+        }
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Enviar SMS de prueba")
+            .setMessage("Se manda un SMS real (con la SIM predeterminada); puede tener costo según tu plan. " +
+                "El resultado llega como aviso y queda en el Registro de eventos.")
+            .setView(LinearLayout(this).apply { setPadding(m, 0, m, 0); addView(campo) })
+            .setPositiveButton("Enviar") { _, _ ->
+                val numero = campo.text.toString().trim()
+                AjustesApp.guardarNumeroPrueba(this, numero)
+                val error = SmsApp.enviarPrueba(this, numero)
+                avisar(if (error == null) "SMS de prueba en camino a $numero" else "No se pudo mandar: $error")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    override fun onRequestPermissionsResult(pedido: Int, permisos: Array<out String>, resultados: IntArray) {
+        super.onRequestPermissionsResult(pedido, permisos, resultados)
+        if (pedido != PEDIDO_SMS) return
+        if (Sms.permitido(this)) smsPrueba()
+        else AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Falta el permiso de SMS")
+            .setMessage("Sin el permiso de SMS no se pueden mandar. Si Android no deja darlo (la app se instaló a mano): " +
+                "Ajustes del celular > Apps > Programador de Mensajes > ⋮ > «Permitir ajustes restringidos».")
+            .setPositiveButton("Entendido", null)
             .show()
     }
 

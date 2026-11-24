@@ -58,16 +58,22 @@ object ManejadorMensajes : Manejador {
 
     override fun alVencer(ctx: Context, a: Aviso, pospuesto: Boolean, perdido: Boolean, avisar: Boolean) {
         val e = Envios.obtener(ctx, a.id)
-        // Apertura automática de WhatsApp solo a la hora (no con lo perdido mientras el celular estaba apagado).
+        // Apertura automática de WhatsApp y SMS automático solo a la hora (no con lo perdido mientras el celular estaba apagado).
         if (pospuesto || e == null) {
-            if (avisar) Notificador.mostrar(ctx, a, comoAlarma = a.alarma && !perdido, pospuesta = pospuesto, abrir = !perdido)
+            val smsSolos = e != null && !perdido && SmsApp.automatico(ctx, e)
+            if (avisar && !(smsSolos && e!!.pendientes.isEmpty()))
+                Notificador.mostrar(ctx, a, comoAlarma = a.alarma && !perdido, pospuesta = pospuesto, abrir = !perdido)
             return
         }
         // Sin repetición: al vencer su fecha queda vencido (la posposición sigue aparte).
         // Con repetición: esa vez se separa en un envío aparte (es el que avisa) y el original sigue desde la próxima.
         val vez = if (e.regla.repite) separarVez(ctx, e) else e.copy(activo = false).also { Envios.guardar(ctx, it) }
-        if (avisar) Notificador.mostrar(ctx, comoAviso(ctx, vez), comoAlarma = vez.alarma && !perdido, pospuesta = false,
-            abrir = !perdido)
+        // SMS automático: se mandan solos y, si no queda nadie por WhatsApp, no hay alarma ni notificación de aviso
+        // (solo "SMS enviado a N de M").
+        val smsSolos = !perdido && SmsApp.automatico(ctx, vez)
+        if (avisar && !(smsSolos && vez.pendientes.isEmpty()))
+            Notificador.mostrar(ctx, comoAviso(ctx, vez), comoAlarma = vez.alarma && !perdido, pospuesta = false,
+                abrir = !perdido)
     }
 
     override fun guardarPospuesto(ctx: Context, id: Int, hasta: Long) {
@@ -82,7 +88,8 @@ object ManejadorMensajes : Manejador {
 
     /**
      * Botón "Enviar" (mientras quede alguien sin enviar por WhatsApp): abre la pantalla de envío.
-     * Botón "Enviar SMS" (mientras quede algún SMS): manda todos los SMS del envío.
+     * Botón "Enviar SMS" (mientras quede algún SMS por mandar): manda todos los SMS del envío
+     * (o abre la pantalla de envío, si falta el permiso o hay que hacer el control de tamaño).
      * Con los dos, Android muestra 3 botones: "Posponer…" queda en la pantalla de alarma y al tocar la notificación.
      */
     override fun accionesExtra(ctx: Context, a: Aviso): List<Notification.Action> {
@@ -96,7 +103,8 @@ object ManejadorMensajes : Manejador {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             botones += Notificador.boton(ctx, "Enviar", pi)
         }
-        if (e.pendientesSms.isNotEmpty()) botones += SmsApp.boton(ctx, a.id, e.pendientesSms.size)
+        val sms = SmsApp.porMandar(ctx, e)   // sin los que ya están en camino (ni con los SMS apagados)
+        if (sms.isNotEmpty()) botones += SmsApp.boton(ctx, e, sms.size)
         return botones
     }
 

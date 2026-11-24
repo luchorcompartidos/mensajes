@@ -40,15 +40,21 @@ enum class ModoEnvio(val codigo: String, val texto: String) {
  * Un destinatario de un envío. [texto] solo se usa en modo "un texto por contacto".
  * [canal]: por dónde se le manda en este envío (arranca con el modo del contacto; se cambia solo para este envío).
  * [enviado]: ya se le mandó por WhatsApp. [smsEnviado]: Android confirmó su SMS.
+ * Control de tamaño del SMS (solo para este envío): [smsOk] = se aceptó que se divida ("Enviar igual");
+ * [smsTexto] = texto del SMS editado o convertido (con las variables ya reemplazadas; "" = el mismo de WhatsApp).
+ * [smsFalla]: motivo de la última falla del SMS ("" = ninguna).
  */
 data class Destino(val contactoId: Int, val texto: String = "", val enviado: Boolean = false,
-                   val canal: ModoEnvio = ModoEnvio.WHATSAPP, val smsEnviado: Boolean = false) {
+                   val canal: ModoEnvio = ModoEnvio.WHATSAPP, val smsEnviado: Boolean = false,
+                   val smsOk: Boolean = false, val smsTexto: String = "", val smsFalla: String = "") {
+    /** Ya se decidió qué hacer con el tamaño del SMS. */
+    val smsDecidido get() = smsOk || smsTexto.isNotBlank()
     val waPendiente get() = canal.whatsapp && !enviado
     val smsPendiente get() = canal.sms && !smsEnviado
     /** No le falta nada (por ninguno de sus canales). */
     val listo get() = !waPendiente && !smsPendiente
     /** Con las marcas en cero (para una vez nueva de un envío que se repite). */
-    fun sinEnviar() = copy(enviado = false, smsEnviado = false)
+    fun sinEnviar() = copy(enviado = false, smsEnviado = false, smsFalla = "")
 }
 
 /** Un envío programado: uno o más contactos, un momento y el texto (común o por contacto). */
@@ -67,7 +73,8 @@ data class Envio(
     val regla: Regla = Regla.NINGUNA,   // repetición (misma regla y claves que Recordatorios)
     val ocurrencias: Int = 0,           // veces que ya llegó su fecha (para "terminar después de X veces")
     val origen: Int = 0,                // > 0 = es una vez separada del envío que se repite con ese id
-    val autoAbrir: Boolean? = null      // abrir WhatsApp solo a la hora del envío: null = según Ajustes
+    val autoAbrir: Boolean? = null,     // abrir WhatsApp solo a la hora del envío: null = según Ajustes
+    val smsAuto: Boolean = false        // SMS: false = "Preguntar antes" (botón Enviar SMS), true = "Automático"
 ) {
     /** Sigue programado y se repite. */
     val repite: Boolean get() = activo && !cerrado && regla.repite
@@ -159,7 +166,17 @@ object Envios {
     /** Marca el SMS de ese contacto como enviado (o no). Devuelve el envío actualizado. */
     fun marcarSms(ctx: Context, id: Int, contactoId: Int, enviado: Boolean = true): Envio? {
         val e = obtener(ctx, id) ?: return null
-        val nuevo = e.copy(destinos = e.destinos.map { if (it.contactoId == contactoId) it.copy(smsEnviado = enviado) else it })
+        val nuevo = e.copy(destinos = e.destinos.map {
+            if (it.contactoId == contactoId) it.copy(smsEnviado = enviado, smsFalla = if (enviado) "" else it.smsFalla) else it
+        })
+        guardar(ctx, nuevo)
+        return nuevo
+    }
+
+    /** Anota (o borra, con "") el motivo de la falla del SMS de ese contacto. */
+    fun fallaSms(ctx: Context, id: Int, contactoId: Int, motivo: String): Envio? {
+        val e = obtener(ctx, id) ?: return null
+        val nuevo = e.copy(destinos = e.destinos.map { if (it.contactoId == contactoId) it.copy(smsFalla = motivo) else it })
         guardar(ctx, nuevo)
         return nuevo
     }
@@ -186,11 +203,14 @@ object Envios {
         e.destinos.forEach {
             d.put(JSONObject().put("c", it.contactoId).put("t", it.texto).put("e", it.enviado)
                 .put("k", it.canal.codigo).put("s", it.smsEnviado))
+            if (it.smsOk) d.getJSONObject(d.length() - 1).put("so", true)
+            if (it.smsTexto.isNotEmpty()) d.getJSONObject(d.length() - 1).put("st", it.smsTexto)
+            if (it.smsFalla.isNotEmpty()) d.getJSONObject(d.length() - 1).put("sf", it.smsFalla)
         }
         return JSONObject().put("id", e.id).put("titulo", e.titulo).put("modo", e.modo.codigo).put("texto", e.texto)
             .put("dest", d).put("momento", e.momento).put("alarma", e.alarma).put("activo", e.activo)
             .put("cerrado", e.cerrado).put("posp", e.pospuestoHasta).put("wa", e.whatsapp)
-            .put("ocurr", e.ocurrencias).put("origen", e.origen)
+            .put("ocurr", e.ocurrencias).put("origen", e.origen).put("smsAuto", e.smsAuto)
             .apply { e.autoAbrir?.let { put("auto", it) } }
             .let { e.regla.ponerEn(it) }
     }
@@ -203,13 +223,15 @@ object Envios {
             destinos = List(d.length()) {
                 val x = d.getJSONObject(it)
                 Destino(x.getInt("c"), x.optString("t"), x.optBoolean("e", false),
-                    ModoEnvio.de(x.optString("k", "W")), x.optBoolean("s", false))
+                    ModoEnvio.de(x.optString("k", "W")), x.optBoolean("s", false),
+                    x.optBoolean("so", false), x.optString("st"), x.optString("sf"))
             },
             momento = o.getLong("momento"), alarma = o.optBoolean("alarma", false),
             activo = o.optBoolean("activo", true), cerrado = o.optBoolean("cerrado", false),
             pospuestoHasta = o.optLong("posp", 0), whatsapp = o.optString("wa"),
             regla = Regla.desde(o), ocurrencias = o.optInt("ocurr", 0), origen = o.optInt("origen", 0),
-            autoAbrir = if (o.has("auto")) o.optBoolean("auto") else null
+            autoAbrir = if (o.has("auto")) o.optBoolean("auto") else null,
+            smsAuto = o.optBoolean("smsAuto", false)
         )
     }
 }

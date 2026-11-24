@@ -80,6 +80,14 @@ object AjustesApp {
     fun autoAbrir(ctx: Context): Boolean = prefs(ctx).getBoolean("auto_abrir", true)
     fun guardarAutoAbrir(ctx: Context, valor: Boolean) = prefs(ctx).edit().putBoolean("auto_abrir", valor).apply()
 
+    /** Interruptor general de SMS (encendido por defecto). Apagado: no se manda ningún SMS y no se espera por ellos. */
+    fun smsActivo(ctx: Context): Boolean = prefs(ctx).getBoolean("sms_activo", true)
+    fun guardarSmsActivo(ctx: Context, valor: Boolean) = prefs(ctx).edit().putBoolean("sms_activo", valor).apply()
+
+    /** Último número usado en "Enviar SMS de prueba". */
+    fun numeroPrueba(ctx: Context): String = prefs(ctx).getString("sms_prueba", "") ?: ""
+    fun guardarNumeroPrueba(ctx: Context, n: String) = prefs(ctx).edit().putString("sms_prueba", n).apply()
+
     /** Lo que vale para este envío (su elección, o la de Ajustes). */
     fun autoAbrir(ctx: Context, e: Envio): Boolean = e.autoAbrir ?: autoAbrir(ctx)
 
@@ -140,6 +148,8 @@ class EnviarActivity : Activity() {
         const val EXTRA_AUTO = "auto"
         /** Al abrirse, manda los SMS pendientes (pidiendo el permiso si falta). */
         const val EXTRA_SMS = "sms"
+        /** Al abrirse, abre la app de SMS para ese contacto (botón "Abrir app de SMS" del aviso de falla). */
+        const val EXTRA_APP_SMS = "app_sms"
         private const val PEDIDO_SMS = 5
     }
 
@@ -148,6 +158,8 @@ class EnviarActivity : Activity() {
     private val manejador = Handler(Looper.getMainLooper())
     private var refrescos = 0       // vueltas de refresco mientras Android confirma los SMS
     private var botonSms: Button? = null
+    private var abrirAppSms = -1    // falta abrir la app de SMS para ese contacto ([EXTRA_APP_SMS])
+    private var esperandoSms = -1   // contacto al que se le abrió la app de SMS (falta confirmar si se envió)
 
     private var envioId = -1
     private var auto = false        // falta abrir WhatsApp solo con el primer pendiente (apertura automática)
@@ -165,6 +177,8 @@ class EnviarActivity : Activity() {
         auto = estado?.getBoolean("auto", false) ?: intent.getBooleanExtra(EXTRA_AUTO, false)
         cadena = estado?.getBoolean("cadena", false) ?: auto
         pedirSms = estado == null && intent.getBooleanExtra(EXTRA_SMS, false)
+        abrirAppSms = if (estado == null) intent.getIntExtra(EXTRA_APP_SMS, -1) else -1
+        esperandoSms = estado?.getInt("esperandoSms", -1) ?: -1
         if (estado == null && auto) Registro.anotar(this, "#$envioId apertura automática: se abrió la pantalla de envío")
         // Si la alarma está sonando, se calla (la notificación queda en la bandeja).
         if (Notificador.sonando(this, envioId)) Notificador.silenciar(this, envioId)
@@ -177,6 +191,7 @@ class EnviarActivity : Activity() {
         val id = nuevo.getIntExtra(Programador.EXTRA_ID, -1)
         if (id != envioId) { envioId = id; esperando = -1; terminado = false; cadena = false }
         if (nuevo.getBooleanExtra(EXTRA_SMS, false)) pedirSms = true
+        nuevo.getIntExtra(EXTRA_APP_SMS, -1).takeIf { it != -1 }?.let { abrirAppSms = it }
         if (nuevo.getBooleanExtra(EXTRA_AUTO, false) && esperando == -1 && !preguntando) {
             auto = true
             cadena = true
@@ -188,6 +203,7 @@ class EnviarActivity : Activity() {
     override fun onSaveInstanceState(salida: Bundle) {
         super.onSaveInstanceState(salida)
         salida.putInt("esperando", esperando)
+        salida.putInt("esperandoSms", esperandoSms)
         salida.putBoolean("terminado", terminado)
         salida.putBoolean("auto", auto)
         salida.putBoolean("cadena", cadena)
@@ -203,7 +219,9 @@ class EnviarActivity : Activity() {
         }
         mostrar(e)
         if (pedirSms) { pedirSms = false; enviarSms(-1) }
-        if (esperando != -1 && !preguntando) confirmar(esperando)
+        if (abrirAppSms != -1) { val c = abrirAppSms; abrirAppSms = -1; appSms(c) }
+        else if (esperandoSms != -1 && !preguntando) confirmarSms(esperandoSms)
+        else if (esperando != -1 && !preguntando) confirmar(esperando)
         else if (auto && !preguntando) {
             auto = false
             e.pendientes.firstOrNull()?.let { enviarA(it.contactoId) } ?: run { cadena = false }
@@ -265,20 +283,45 @@ class EnviarActivity : Activity() {
                 .apply { topMargin = (8 * resources.displayMetrics.density).toInt() })
             nuevo.setOnClickListener { enviarSms(-1) }
         }
-        val n = if (e.cerrado) 0 else e.pendientesSms.size
+        val n = SmsApp.porMandar(this, e).size
         b.visibility = if (n == 0) View.GONE else View.VISIBLE
         b.text = if (n > 1) "Enviar SMS ($n contactos)" else "Enviar SMS"
+        if (!AjustesApp.smsActivo(this) && e.pendientesSms.isNotEmpty() && !e.cerrado)
+            findViewById<TextView>(R.id.enAyuda).text = "Los SMS están apagados en Ajustes: no se manda ninguno."
     }
 
     /** Manda los SMS pendientes ([contactoId] = -1) o el de un contacto; pide el permiso si falta. */
     private fun enviarSms(contactoId: Int) {
+        if (!AjustesApp.smsActivo(this)) { avisar("Los SMS están apagados en Ajustes"); return }
         if (!Sms.permitido(this)) {
             smsLuegoDePermiso = contactoId
             requestPermissions(arrayOf(Manifest.permission.SEND_SMS), PEDIDO_SMS)
             return
         }
         if (Notificador.sonando(this, envioId)) Notificador.silenciar(this, envioId)
-        avisar(if (contactoId == -1) SmsApp.enviarTodos(this, envioId) else SmsApp.enviarUno(this, envioId, contactoId))
+        val e = Envios.obtener(this, envioId) ?: return
+        val destinos = if (contactoId == -1) SmsApp.porMandar(this, e)
+                       else e.destinos.filter { it.contactoId == contactoId }
+        if (destinos.isEmpty()) { avisar(SmsApp.enviarTodos(this, envioId)); return }   // nada por mandar: dice por qué
+        // Control "se dividiría en N partes" (los ya decididos no se vuelven a preguntar).
+        controlarSms(e, destinos) { controlado, noEnviar ->
+            if (isFinishing) return@controlarSms
+            // Se guarda la decisión sobre los datos actuales (pudo llegar una confirmación mientras tanto).
+            val decididos = controlado.destinos.associateBy { it.contactoId }
+            Envios.obtener(this, envioId)?.let { actual ->
+                Envios.guardar(this, actual.copy(destinos = actual.destinos.map { d ->
+                    decididos[d.contactoId]?.let { d.copy(smsOk = it.smsOk, smsTexto = it.smsTexto) } ?: d
+                }))
+            }
+            val mandar = destinos.map { it.contactoId }.filter { it !in noEnviar }
+            if (mandar.isEmpty()) { avisar("No se mandó ningún SMS"); return@controlarSms }
+            avisar(if (contactoId == -1 && noEnviar.isEmpty()) SmsApp.enviarTodos(this, envioId)
+                   else mandar.joinToString("\n") { SmsApp.enviarUno(this, envioId, it) })
+            despuesDeMandar()
+        }
+    }
+
+    private fun despuesDeMandar() {
         Notificador.actualizar(this, envioId)
         // Android confirma cada SMS al rato: se vuelve a dibujar unas veces para mostrar las marcas.
         refrescos = 10
@@ -329,6 +372,45 @@ class EnviarActivity : Activity() {
             .show()
     }
 
+    /** Abre la app de SMS con el número y el texto de ese contacto; al volver pregunta si se envió. */
+    private fun appSms(contactoId: Int) {
+        val e = Envios.obtener(this, envioId) ?: return
+        val d = e.destinos.firstOrNull { it.contactoId == contactoId } ?: run { avisar("Ese contacto ya no está en el envío"); return }
+        val c = Contactos.obtener(this, contactoId) ?: run { avisar("Ese contacto ya no existe"); return }
+        val error = SmsApp.abrirAppSms(this, c.numero, SmsApp.texto(this, e, d))
+        if (error != null) { avisar(error); return }
+        SmsApp.quitarAvisoFalla(this, envioId, contactoId)
+        esperandoSms = contactoId
+        Registro.anotar(this, "#$envioId app de SMS abierta para «${c.etiqueta}»")
+    }
+
+    /** Al volver de la app de SMS: ¿se envió? (Android no le avisa a esta app). */
+    private fun confirmarSms(contactoId: Int) {
+        preguntando = true
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("¿Se envió el SMS?")
+            .setMessage("¿Enviaste el SMS a ${nombre(contactoId)} desde la app de SMS?")
+            .setPositiveButton("Sí, enviado") { _, _ ->
+                Registro.anotar(this, "#$envioId SMS a «${nombre(contactoId)}» enviado desde la app de SMS")
+                Envios.marcarSms(this, envioId, contactoId)?.let { revisar(it) }
+            }
+            .setNegativeButton("No", null)
+            .setOnDismissListener { preguntando = false; esperandoSms = -1 }
+            .show()
+    }
+
+    /** SMS que no salió: Reintentar / Abrir app de SMS. */
+    private fun opcionesFalla(d: Destino) {
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("SMS no enviado")
+            .setMessage("El SMS a ${nombre(d.contactoId)} no salió (${d.smsFalla}). Podés volver a intentar o mandarlo " +
+                "desde la app de SMS del celular (puede tener costo según tu plan).")
+            .setPositiveButton("Reintentar") { _, _ -> enviarSms(d.contactoId) }
+            .setNeutralButton("Abrir app de SMS") { _, _ -> appSms(d.contactoId) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     /** Fila de un contacto: toque = enviarle a él; mantener presionado = marcar/desmarcar como enviado. */
     private fun fila(e: Envio, d: Destino): View {
         val dp = resources.displayMetrics.density
@@ -347,7 +429,12 @@ class EnviarActivity : Activity() {
             addView(TextView(this@EnviarActivity).apply {
                 val estados = mutableListOf<String>()
                 if (d.canal.whatsapp) estados += if (d.enviado) "WhatsApp enviado" else "WhatsApp pendiente"
-                if (d.canal.sms) estados += if (d.smsEnviado) "SMS enviado" else "SMS pendiente"
+                if (d.canal.sms) estados += when {
+                    d.smsEnviado -> "SMS enviado"
+                    d.smsFalla.isNotEmpty() -> "SMS no salió (${d.smsFalla})"
+                    SmsApp.enCamino(this@EnviarActivity, e.id, d.contactoId) -> "SMS en camino"
+                    else -> "SMS pendiente"
+                }
                 text = (c?.numero ?: "") + " · " + estados.joinToString(" · ")
                 textSize = 14f
                 setTextColor(getColor(RN.color.texto2))
@@ -361,13 +448,15 @@ class EnviarActivity : Activity() {
                 setPadding(0, (4 * dp).toInt(), 0, 0)
             })
             setOnClickListener {
-                if (!d.canal.whatsapp) {
+                if (d.smsPendiente && d.smsFalla.isNotEmpty() && (!d.canal.whatsapp || d.enviado)) opcionesFalla(d)
+                else if (!d.canal.whatsapp) {
                     // Solo SMS: mandarlo (o volver a mandarlo) a este contacto.
                     AlertDialog.Builder(this@EnviarActivity, temaDialogo())
                         .setTitle(if (d.smsEnviado) "SMS ya enviado" else "Enviar SMS")
                         .setMessage((if (d.smsEnviado) "¿Mandarle el SMS otra vez a " else "¿Mandarle el SMS a ") +
                             "${nombre(d.contactoId)}? (puede tener costo según tu plan)")
                         .setPositiveButton("Enviar SMS") { _, _ -> enviarSms(d.contactoId) }
+                        .setNeutralButton("Abrir app de SMS") { _, _ -> appSms(d.contactoId) }
                         .setNegativeButton("Cancelar", null)
                         .show()
                 }
@@ -431,7 +520,7 @@ class EnviarActivity : Activity() {
 
     /** Vuelve a dibujar y, si ya se envió a todos, cierra el envío; si no, actualiza el progreso de la notificación. */
     private fun revisar(e: Envio) {
-        if (e.faltan.isEmpty() && !e.cerrado) {
+        if (SmsApp.faltan(this, e).isEmpty() && !e.cerrado) {
             cerrarEnvio(this, envioId, "enviado a todos")
             terminado = true
             avisar("Enviado a todos. Envío cerrado.")
@@ -444,7 +533,7 @@ class EnviarActivity : Activity() {
     private fun cerrar() {
         val e = Envios.obtener(this, envioId)
         if (e == null || e.cerrado) { finish(); return }
-        val faltan = e.faltan.size
+        val faltan = SmsApp.faltan(this, e).size
         AlertDialog.Builder(this, temaDialogo())
             .setTitle("Cerrar envío")
             .setMessage((if (faltan == 0) "¿Cerrar el envío?"
