@@ -59,6 +59,8 @@ class EditarActivity : Activity() {
         txtVista = findViewById(R.id.txtVista)
         seguir(edTexto)
         findViewById<Button>(R.id.btnVariable).setOnClickListener { elegirVariable() }
+        findViewById<Button>(R.id.btnUsarPlantilla).setOnClickListener { usarPlantilla() }
+        findViewById<Button>(R.id.btnGuardarPlantilla).setOnClickListener { guardarComoPlantilla() }
 
         original = Envios.obtener(this, intent.getIntExtra(Programador.EXTRA_ID, -1))
         val e = original
@@ -206,6 +208,73 @@ class EditarActivity : Activity() {
     private fun elegirVariable() {
         val campo = ultimoCampo ?: run { avisar("Elegí primero los contactos"); return }
         insertarVariable(campo) { actualizarVista() }
+    }
+
+    /** Para quién es [campo]: "" en el texto común, " para Ana" en un texto por contacto. */
+    private fun paraQuien(campo: EditText): String {
+        if (campo === edTexto) return ""
+        val id = camposTexto.entries.firstOrNull { it.value === campo }?.key
+        return " para " + (id?.let { Contactos.obtener(this, it)?.etiqueta } ?: "el contacto")
+    }
+
+    /**
+     * Elige una plantilla y la aplica al último campo de texto tocado: si está vacío, la pone directamente;
+     * si no, pregunta reemplazar o agregar al final. En "un texto por contacto" también se puede
+     * reemplazar en todos los contactos. El texto se copia (no queda enlazado a la plantilla).
+     */
+    private fun usarPlantilla() {
+        val campo = ultimoCampo ?: run { avisar("Elegí primero los contactos"); return }
+        elegirPlantilla { p ->
+            val varios = campo !== edTexto && camposTexto.size > 1
+            if (campo.text.isBlank() && !varios) { aplicarPlantilla(campo, p.texto, agregar = false); return@elegirPlantilla }
+            val opciones = mutableListOf(
+                "Reemplazar el texto${paraQuien(campo)}",
+                "Agregar al final del texto${paraQuien(campo)}"
+            )
+            if (varios) opciones += "Reemplazar en todos los contactos"
+            AlertDialog.Builder(this, temaDialogo())
+                .setTitle("«${p.etiqueta}»")
+                .setItems(opciones.toTypedArray()) { _, i ->
+                    when (i) {
+                        0 -> aplicarPlantilla(campo, p.texto, agregar = false)
+                        1 -> aplicarPlantilla(campo, p.texto, agregar = true)
+                        else -> {
+                            camposTexto.values.forEach { it.setText(p.texto) }
+                            guardarCamposTexto()
+                            actualizarVista()
+                            avisar("Plantilla aplicada a todos los contactos")
+                        }
+                    }
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
+
+    private fun aplicarPlantilla(campo: EditText, texto: String, agregar: Boolean) {
+        val actual = campo.text.toString()
+        val nuevo = when {
+            !agregar || actual.isBlank() -> texto
+            actual.endsWith("\n") -> actual + texto
+            else -> actual.trimEnd() + "\n" + texto
+        }
+        campo.setText(nuevo)
+        campo.requestFocus()
+        campo.setSelection(campo.text.length)
+        ultimoCampo = campo
+        actualizarVista()
+    }
+
+    /** Crea una plantilla con el texto del último campo tocado (se puede ajustar nombre y texto antes de guardar). */
+    private fun guardarComoPlantilla() {
+        val campo = ultimoCampo ?: run { avisar("Elegí primero los contactos"); return }
+        val texto = campo.text.toString().trim()
+        if (texto.isEmpty()) { avisar("Escribí primero el texto del mensaje"); return }
+        Plantillas.mismoTexto(this, texto)?.let {
+            avisar("Ese texto ya está guardado en la plantilla «${it.etiqueta}»")
+            return
+        }
+        editarPlantilla(null, texto) {}
     }
 
     private fun guardarCamposTexto() {

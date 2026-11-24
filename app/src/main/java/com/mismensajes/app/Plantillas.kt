@@ -70,6 +70,13 @@ object Plantillas {
         return todas(ctx).firstOrNull { it.id != excepto && it.nombre.trim().lowercase() == n }
     }
 
+    /** Plantilla con exactamente el mismo texto (sin contar espacios de los bordes), o null. */
+    fun mismoTexto(ctx: Context, texto: String): Plantilla? {
+        val t = texto.trim()
+        if (t.isEmpty()) return null
+        return todas(ctx).firstOrNull { it.texto.trim() == t }
+    }
+
     private fun guardarTodas(ctx: Context, lista: List<Plantilla>) {
         val arr = JSONArray()
         lista.sortedBy { it.id }.forEach {
@@ -95,7 +102,8 @@ class PlantillasActivity : Activity() {
             setOnClickListener { editarPlantilla(null) { armar() } }
         }
         val ayuda = TextView(this).apply {
-            text = "Textos que se repiten, listos para usar en cualquier envío. Pueden llevar variables " +
+            text = "Textos que se repiten, listos para usar en cualquier envío (botón «Usar plantilla» al " +
+                "editar un envío; también se crean con «Guardar como plantilla»). Pueden llevar variables " +
                 "(ej. {primer_nombre} o {saludo}), que se completan al abrir WhatsApp para cada contacto.\n" +
                 "Tocá una plantilla para editarla; mantenela presionada para borrarla."
             textSize = 13f
@@ -167,9 +175,10 @@ private val CONTACTO_EJEMPLO = Contacto(0, "Ana María", "")
 
 /**
  * Alta ([actual] = null) o edición de una plantilla: nombre, texto, "Insertar variable" y vista previa.
+ * [textoInicial] precarga el texto de una plantilla nueva (ej. "Guardar como plantilla" desde un envío).
  * Con un error (falta el texto, nombre repetido) el diálogo queda abierto para corregir.
  */
-fun Activity.editarPlantilla(actual: Plantilla?, alGuardar: (Plantilla?) -> Unit) {
+fun Activity.editarPlantilla(actual: Plantilla?, textoInicial: String = "", alGuardar: (Plantilla?) -> Unit) {
     val c = ContextThemeWrapper(this, temaDialogo())
     val dp = resources.displayMetrics.density
     val m = (20 * dp).toInt()
@@ -185,7 +194,7 @@ fun Activity.editarPlantilla(actual: Plantilla?, alGuardar: (Plantilla?) -> Unit
         minLines = 3
         maxLines = 8
         gravity = android.view.Gravity.TOP or android.view.Gravity.START
-        setText(actual?.texto ?: "")
+        setText(actual?.texto ?: textoInicial)
     }
     val vista = TextView(c).apply {
         textSize = 13f
@@ -245,6 +254,33 @@ fun Activity.editarPlantilla(actual: Plantilla?, alGuardar: (Plantilla?) -> Unit
         }
     }
     d.show()
+}
+
+/**
+ * Lista de plantillas para elegir una (con nombre: el nombre y el comienzo del texto).
+ * Sin plantillas, o con "＋ Nueva plantilla", se crea una y se usa directamente.
+ */
+fun Activity.elegirPlantilla(alElegir: (Plantilla) -> Unit) {
+    val todas = Plantillas.ordenadas(this)
+    val crear: () -> Unit = { editarPlantilla(null) { p -> if (p != null) alElegir(p) } }
+    if (todas.isEmpty()) {
+        AlertDialog.Builder(this, temaDialogo())
+            .setTitle("Usar plantilla")
+            .setMessage("Todavía no hay plantillas. ¿Crear una ahora?")
+            .setPositiveButton("Nueva plantilla") { _, _ -> crear() }
+            .setNegativeButton("Cancelar", null)
+            .show()
+        return
+    }
+    val items = todas.map { p ->
+        if (p.nombre.isBlank()) p.etiqueta
+        else p.nombre + "\n" + Plantilla(0, "", p.texto).etiqueta
+    } + "＋ Nueva plantilla"
+    AlertDialog.Builder(this, temaDialogo())
+        .setTitle("Usar plantilla")
+        .setItems(items.toTypedArray()) { _, i -> if (i < todas.size) alElegir(todas[i]) else crear() }
+        .setNegativeButton("Cancelar", null)
+        .show()
 }
 
 /** Confirmación antes de borrar una plantilla (los envíos ya creados con ese texto no cambian). */
