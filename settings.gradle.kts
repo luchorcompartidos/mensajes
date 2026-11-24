@@ -16,7 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "ProgramadorMensajes"
 include(":app")
-// Núcleo compartido (alarmas, notificaciones, posponer, contactos, tema…).
-// Etapa actual: módulo dentro de este repo. Más adelante pasa a su propio repo
-// (luchorcompartidos/nucleo-android) como submódulo, y lo usa también Recordatorios.
+// Núcleo compartido (alarmas, notificaciones, posponer, versión, tema…).
+// Es el submódulo nucleo/ → repo luchorcompartidos/nucleo-android (más adelante
+// lo usa también Recordatorios). Clonar con: git clone --recurse-submodules …
 include(":nucleo")

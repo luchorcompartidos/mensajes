@@ -15,21 +15,20 @@
 | Tipo | Android APK (Kotlin nativo, compilado en GitHub Actions) |
 | Estado | En desarrollo |
 | Última versión (Release) | **v0.0.9** (23-11-2026) |
-| Se conecta con | WhatsApp (por intent, sin API) · a futuro Google Sheets |
+| Se conecta con | WhatsApp (por intent, sin API) · núcleo `luchorcompartidos/nucleo-android` (submódulo `nucleo/`) · a futuro Google Sheets |
 
 ## 2. Etapa actual
-**Etapa 0.8 parte B — cerrada** → Release **v0.0.9**: plantillas usables desde los envíos. Etapa 0.8 cerrada.
-- Edición del envío: debajo de "Insertar variable", botones **"Usar plantilla"** y **"Guardar como plantilla"**; actúan sobre el último campo de texto tocado (texto común o el de un contacto).
-- "Usar plantilla": campo vacío → se pone directo; con texto → "Reemplazar" o "Agregar al final" (en renglón nuevo); en "un texto por contacto" con varios contactos, también "Reemplazar en todos los contactos". Sin plantillas (o con "＋ Nueva plantilla") se crea una y se aplica.
-- "Guardar como plantilla": abre el diálogo de plantilla nueva con el texto precargado; si ya existe una con el mismo texto, avisa y no duplica.
-- `Plantillas.kt`: `elegirPlantilla`, `Plantillas.mismoTexto`, `editarPlantilla(actual, textoInicial)`; ayuda de la pantalla Plantillas actualizada.
+**Etapa 0.9 — Núcleo a su repo: cerrada** (sin Release: el APK no cambia).
+- `nucleo/` ahora es el submódulo de `luchorcompartidos/nucleo-android` (núcleo 0.5.0, mismo código; solo cambió un comentario).
+- `compilar.yml`: checkout con `submodules: true`. Se subió como compilación de prueba (`[skip release]`) para verificar que compila.
+- El repo del núcleo tiene su propio DESARROLLO.md y README.md (cómo usarlo y actualizarlo en una app).
 - **A probar en el celular:** v0.0.9 + lo pendiente de la v0.0.5 a v0.0.8.
 - En curso: —
 
 ## 3. Próximos pasos
 1. **Probar la v0.0.9** (incluye lo de la v0.0.5 a v0.0.8) en el celular y corregir lo que aparezca.
-2. **Etapa posterior — Núcleo a su repo:** mover `nucleo/` a `luchorcompartidos/nucleo-android` (submódulo, `submodules: true` en Actions) y, en etapa aparte, migrar Recordatorios a ese núcleo.
-3. A definir: listas de contactos, importar desde Google Sheets, SMS automático (ver sección 5).
+2. **Etapa aparte — Migrar Recordatorios** al núcleo `nucleo-android` (submódulo); de paso alinear `WhatsApp.abrir` con `EnviarWhatsappActivity`.
+3. A definir: listas de contactos, repetición, importar desde Google Sheets, SMS automático (ver sección 5).
 
 ## 4. Decisiones tomadas
 - 2026-11-23 App separada de Recordatorios (no pantalla nueva dentro de ella): escalabilidad y funciones futuras propias de mensajería.
@@ -58,6 +57,7 @@
 - 2026-11-23 `Version.kt` de Recordatorios va al núcleo (`VersionGitHub`, repo configurable por app), no a `:app`: así Recordatorios lo reutiliza al migrar. Sin Changelog interno: se usa el de las Releases.
 - 2026-11-23 Link de Mi Panel: cada Release sube además una copia de nombre fijo → `https://github.com/luchorcompartidos/mensajes/releases/latest/download/programador-mensajes.apk`.
 - 2026-11-23 Plantillas: el texto se **copia** al envío (no queda enlazado); editar o borrar una plantilla no cambia envíos ya creados. Parte A (ABM) y parte B (usar en envíos) en Releases separadas.
+- 2026-11-23 Núcleo en su repo `nucleo-android`, como submódulo `nucleo/`. Cambios del núcleo se hacen en ese repo y acá se actualiza el submódulo (ver README del núcleo). Mover el núcleo no genera Release (el APK no cambia).
 - 2026-11-23 "Usar plantilla" / "Guardar como plantilla" trabajan sobre el último campo de texto tocado (igual que "Insertar variable"); "Agregar" va al final, en renglón nuevo; no se guardan dos plantillas con el mismo texto.
 
 ## 5. Pendientes / dudas abiertas
@@ -69,11 +69,11 @@
 - [ ] Futuro: SMS automático (`SEND_SMS`, base en `SuspensionSms` / `enviarSmsPrueba`), listas, importar desde Google Sheets.
 
 ## 6. Datos técnicos clave
-- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio`, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`); núcleo en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
+- Archivos principales (`app/src/main/java/com/mismensajes/app/`): `AppMensajes.kt` (Application + `ManejadorMensajes`), `Datos.kt` (`Envio`, `Envios`, `Contacto`, `Contactos`, `Agenda`), `MainActivity.kt` (lista), `EditarActivity.kt` (alta/edición/borrado), `ContactosActivity.kt` (contactos + diálogos), `Pantallas.kt` (`PosponerActivity`, `AlarmaActivity`, `elegirHora`), `Enviar.kt` (`WhatsApp`, `AjustesApp` —prefs "mensajes_ajustes"—, `cerrarEnvio`, `EnviarActivity`), `AjustesActivity.kt` (WhatsApp + posponer rápido + alarma por defecto), `Variables.kt` (variables del texto), `Plantillas.kt` (`Plantilla`, `Plantillas`, `PlantillasActivity`, `editarPlantilla`, `elegirPlantilla`, `insertarVariable`); núcleo (submódulo `nucleo/`, repo `nucleo-android`) en `nucleo/src/main/java/com/mis/nucleo/`: `Nucleo.kt` (configurar, `Aviso`, `Manejador`), `Programador.kt` (alarmas + `AlarmaReceiver`/`AccionReceiver`/`ArranqueReceiver`), `Notificador.kt`, `Posposicion.kt` (+ `Ajustes`, `Tiempo`, `Registro`, `Permisos`), `Version.kt` (`VersionGitHub`: Releases, Changelog, aviso de versión nueva); `nucleo/src/main/res` (tema, paleta, botones, `ic_notif`); `.github/workflows/compilar.yml`.
 - Requisitos heredados: minSdk 34 (Android 14), compileSdk/targetSdk 35. Permisos de alarmas (`POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `USE_FULL_SCREEN_INTENT`) y receivers declarados en el manifiesto de `:nucleo`; `INTERNET` (Releases de GitHub) también en `:nucleo`; `READ_CONTACTS` en el manifiesto de `:app` (solo para validar); falta `SEND_SMS` (solo con SMS automático).
 - Configuración / servicios: Secrets `KEYSTORE_B64` y `KEYSTORE_PASS` cargados (los mismos de Recordatorios; alias `recordatorios`, o el Secret `KEYSTORE_ALIAS` si se cambia la clave). Respaldo: `secretos-github.txt` del chat "Recordatorios PWA vs app nativa" (14-11-2026).
-- Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
-- Núcleo: versión propia (`Nucleo.VERSION`, hoy 0.5.0: suma `VersionGitHub`), independiente de la de cada app; `useAndroidX=false` (sin librerías externas).
+- Cómo se publica: push a `main` → GitHub Actions (`compilar.yml`, checkout con submódulos) compila el APK y lo adjunta a la Release (`programador-mensajes-X.Y.Z.apk` + `programador-mensajes.apk`).
+- Núcleo: versión propia (`Nucleo.VERSION`, hoy 0.5.0), independiente de la de cada app; `useAndroidX=false` (sin librerías externas). Para tocarlo: cambiar en `nucleo-android`, luego `cd nucleo && git pull origin main`, y commitear el submódulo acá.
 - Releases: según `ESTANDAR-VERSIONES.md` del repo home (`[major]` / `[minor]` / `[patch]` / `[skip release]` en el commit; cambios que no tocan la app van sin release). Como Recordatorios: solo Changelog y aviso con link al instalador.
 
 ## 7. Historial (resumido)
@@ -87,6 +87,7 @@
 - 2026-11-23: Etapa 0.7: `VersionGitHub` en el núcleo (0.5.0), aviso de versión nueva en la pantalla principal, versión tocable y "Acerca de" en Ajustes con Changelog e instalador → Release **v0.0.7** (patch).
 - 2026-11-23: Etapa 0.8 parte A: plantillas de texto reutilizables (lista + alta/edición/borrado, con variables y vista previa) y botón "Plantillas" en la principal → Release **v0.0.8** (patch).
 - 2026-11-23: Etapa 0.8 parte B: "Usar plantilla" (reemplazar, agregar o en todos los contactos) y "Guardar como plantilla" en la edición del envío → Release **v0.0.9** (patch). Etapa 0.8 cerrada.
+- 2026-11-23: Etapa 0.9: núcleo movido a `luchorcompartidos/nucleo-android` (submódulo `nucleo/`, `submodules: true` en Actions) → sin Release (compilación de prueba).
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*
