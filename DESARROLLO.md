@@ -23,13 +23,12 @@
 - **Sin valor:** se envía vacío, con aviso en la vista previa de la importación, en la edición del envío y en la pantalla de envío.
 - **Ficha del contacto:** "Datos para variables" (editar y "Agregar dato…"). "Insertar variable" lista también las propias; la vista previa de plantillas las muestra como «monto».
 - **A probar en el celular:** v0.0.17 (importar contactos con columnas extra y reimportar con celdas vacías; exportar; importar envíos con `{turno}` que pise al del contacto; variable sin valor —avisos y texto enviado—; ficha del contacto con "Agregar dato…"; Insertar variable; SMS con variables y control de tamaño; SMS de prueba y "SMS en camino", que ahora usan el núcleo) + lo pendiente de la v0.0.5 a v0.0.16.
-- En curso: —. **Pendiente del usuario:** crear el tag **v0.9.0** del núcleo (pre-release, commit `8c36887`); desde la sesión de Claude no se pudo subir.
+- En curso: —. Tag **v0.9.0** del núcleo creado por el usuario.
 
 ## 3. Próximos pasos
 1. **Probar la v0.0.17** (variables) y la v0.0.16 (SMS), con lo de la v0.0.5 a v0.0.15, y corregir lo que aparezca.
-2. Crear el tag v0.9.0 del núcleo (ver DESARROLLO.md de `nucleo-android`, sección 4).
-3. Siguiente funcionalidad a definir (`DEFINICIONES.md` C.7: elegir SIM, Apps Script; o exportar envíos a CSV).
-4. Migrar Recordatorios al núcleo: por ahora no (decisión 24-11). A definir: grupo Default como lista.
+2. Siguiente funcionalidad a definir (`DEFINICIONES.md` C.7: elegir SIM, Apps Script; o exportar envíos a CSV).
+3. Migrar Recordatorios al núcleo: por ahora no (decisión 24-11). A definir: grupo Default como lista.
 
 ## 4. Decisiones tomadas
 - 2026-11-23 App separada de Recordatorios (no pantalla nueva dentro de ella): escalabilidad y funciones futuras propias de mensajería.
@@ -71,12 +70,11 @@
 - 2026-11-24 SMS parte A: modo del contacto `ModoEnvio` (códigos W/S/A de Recordatorios, sin "Desactivado"); el destino guarda `canal` y `smsEnviado` aparte de `enviado` (WhatsApp); "pendientes" = WhatsApp, `pendientesSms`, y el envío se cierra cuando a nadie le falta nada (`faltan`). El SMS usa el mismo texto que WhatsApp (variables reemplazadas, "→" como "->"). Botón "Enviar SMS" de la notificación: con permiso manda directo (receiver); sin permiso abre la pantalla, que lo pide. Con WhatsApp y SMS pendientes a la vez, la notificación tiene Enviar / Enviar SMS / Posponer rápido ("Posponer…" queda en la alarma y al tocar la notificación). El contador del editor se muestra solo si algún destinatario va por SMS.
 - 2026-11-24 SMS parte B: el modo (Preguntar antes / Automático) es **por envío** (`Envio.smsAuto`, por defecto Preguntar antes). La decisión del control de tamaño queda en el destino (`smsOk` = enviar igual, `smsTexto` = editado/convertido, con las variables ya reemplazadas; se borra al editar el envío y se conserva en cada vez de un envío que se repite). Automático solo a la hora o en una posposición, no con lo perdido con el celular apagado (ahí avisa con "Enviar SMS"). "En camino" = el estado que guarda el núcleo (`sms_envios`), para no mandar dos veces. Interruptor general en `:app` (`AjustesApp`); el SMS de prueba y "en camino" pasaron al núcleo en la 0.9.0 (`Sms.enviarPrueba`, `Sms.enCamino`); el aviso del resultado de la prueba sigue en la app.
 - 2026-11-24 Variables desde la planilla: de **los dos CSV** (contacto → `Contacto.datos`; envío → `Destino.datos`, que pisa al del contacto); celda vacía no borra; **sin valor = vacío con aviso**; editables en la ficha del contacto (no en el envío); nombres reservados (`Variables.RESERVADAS` y variables de la app) no se usan. Va en Release **Patch** (v0.0.17).
-- 2026-11-24 `Sms.enCamino`, `olvidar` y `enviarPrueba` pasan al núcleo (0.9.0). El tag del núcleo lo sigue creando el usuario (el push de tags desde la sesión de Claude se corta).
+- 2026-11-24 `Sms.enCamino`, `olvidar` y `enviarPrueba` pasan al núcleo (0.9.0). El tag del núcleo lo crea el usuario (el push de tags desde la sesión de Claude se corta); v0.9.0 → `8c36887`, creado.
 - 2026-11-23 "Usar plantilla" / "Guardar como plantilla" trabajan sobre el último campo de texto tocado (igual que "Insertar variable"); "Agregar" va al final, en renglón nuevo; no se guardan dos plantillas con el mismo texto.
 
 ## 5. Pendientes / dudas abiertas
 - [ ] Probar en el celular de la v0.0.5 a la v0.0.17 (ver sección 2).
-- [ ] Tag v0.9.0 del núcleo (lo crea el usuario).
 - [ ] ¿Exportar envíos a CSV (respaldo / para editar en la planilla)? No pedido todavía.
 - [ ] ¿Sumar "Compartir" al exportar (necesita un proveedor de archivos propio, sin AndroidX)? Hoy se guarda con el selector (incluye Drive).
 - [ ] Futuro: elegir SIM para los SMS (hoy, la predeterminada).
@@ -112,7 +110,7 @@
 - 2026-11-24: Etapa 0.14: importar envíos desde CSV (botón "Importar" en la principal, `CsvEnvios.kt`, alarma/repetición/veces, actualiza los existentes) → Release **v0.0.14** (patch).
 - 2026-11-24: Etapa 0.15 parte A: SMS "Preguntar antes" (modo por contacto y canal por envío, columna `modo` del CSV, contador en el editor, "Enviar SMS" con marca automática); núcleo 0.8.0 `Sms.kt` → Release **v0.0.15** (patch).
 - 2026-11-24: Etapa 0.15 parte B: SMS automático por envío (control al guardar), control "se dividiría en N partes" al enviar, Reintentar / Abrir app de SMS, Ajustes con interruptor general y SMS de prueba → Release **v0.0.16** (patch). Etapa 0.15 cerrada. Tag v0.8.0 del núcleo creado por el usuario.
-- 2026-11-24: Núcleo 0.9.0 (`Sms.enCamino`, `olvidar`, `enviarPrueba`) y su DESARROLLO.md al día. Etapa 0.16: variables desde la planilla (columnas extra de los CSV, ficha del contacto, avisos sin valor) → Release **v0.0.17** (patch).
+- 2026-11-24: Núcleo 0.9.0 (`Sms.enCamino`, `olvidar`, `enviarPrueba`) y su DESARROLLO.md al día. Etapa 0.16: variables desde la planilla (columnas extra de los CSV, ficha del contacto, avisos sin valor) → Release **v0.0.17** (patch). Tag v0.9.0 del núcleo creado por el usuario.
 
 ---
 *Al cerrar cada sesión: actualizar secciones 1, 2, 3 y 7, y subir el archivo al repo.*
